@@ -2,9 +2,8 @@ import { Command } from 'commander';
 import path from 'path';
 import net from 'net';
 import fs from 'fs-extra';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { loadConfig } from './config.js';
+import { createApp } from './app.js';
 
 interface NotedOptions {
   port: string;
@@ -25,20 +24,20 @@ program
   .option('-r, --readonly', 'run in read-only mode', false)
   .option('--increment-port', 'automatically increment port if in use', false)
   .action(async (dirPath: string, options: NotedOptions) => {
-    const absolutePath = path.resolve(process.cwd(), dirPath);
+    const config = await loadConfig(options, dirPath);
     
-    if (!(await fs.pathExists(absolutePath))) {
-      console.error(`Error: Path "${absolutePath}" does not exist.`);
+    if (!(await fs.pathExists(config.rootPath))) {
+      console.error(`Error: Path "${config.rootPath}" does not exist.`);
       process.exit(1);
     }
 
-    const stats = await fs.stat(absolutePath);
+    const stats = await fs.stat(config.rootPath);
     if (!stats.isDirectory()) {
-      console.error(`Error: Path "${absolutePath}" is not a directory.`);
+      console.error(`Error: Path "${config.rootPath}" is not a directory.`);
       process.exit(1);
     }
 
-    let port = parseInt(options.port, 10);
+    let port = config.port;
     const maxPort = 65535;
 
     const isPortAvailable = (p: number): Promise<boolean> => {
@@ -54,7 +53,7 @@ program
     };
 
     while (!(await isPortAvailable(port))) {
-      if (!options.incrementPort) {
+      if (!config.incrementPort) {
         console.error(`Error: Port ${port} is already in use. Use --increment-port to find an available port.`);
         process.exit(1);
       }
@@ -68,12 +67,20 @@ program
       }
     }
 
-    console.log(`Starting noted in: ${absolutePath}`);
-    console.log(`Port: ${port}`);
-    console.log(`Read-only: ${options.readonly}`);
-    console.log(`Config: ${options.config}`);
+    // Update config with final port
+    config.port = port;
+
+    const app = createApp(config);
     
-    // TODO: Launch Koa server (Stage 3)
+    app.listen(config.port, () => {
+      console.log(`\n🚀 noted is running!`);
+      console.log(`----------------------------------`);
+      console.log(`Directory:  ${config.rootPath}`);
+      console.log(`Port:       ${config.port}`);
+      console.log(`Read-only:  ${config.readonly}`);
+      console.log(`Config:     ${config.configPath}`);
+      console.log(`----------------------------------\n`);
+    });
   });
 
 program.parse(process.argv);

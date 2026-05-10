@@ -2,7 +2,7 @@
   "name": "server",
   "version": "1.0.0",
   "description": "",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
@@ -12,19 +12,22 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "@koa/router": "^15.5.0",
     "commander": "^14.0.3",
     "dotenv": "^17.4.2",
     "fs-extra": "^11.3.5",
-    "koa": "^3.2.0"
+    "koa": "^3.2.0",
+    "koa-logger": "^4.0.0",
+    "koa-static": "^5.0.0"
   },
   "devDependencies": {
     "@types/dotenv": "^6.1.1",
     "@types/fs-extra": "^11.0.4",
     "@types/koa": "^3.0.2",
     "@types/koa__router": "^12.0.5",
+    "@types/koa-logger": "^3.1.5",
+    "@types/koa-static": "^4.0.4",
     "@types/node": "^25.6.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
