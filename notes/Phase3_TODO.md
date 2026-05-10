@@ -9,21 +9,21 @@
 - [x] Implement navigation from `FileBrowser.vue` to `Editor.vue` when a file is clicked.
 
 ## Stage 2: Create & Rename (Backend & Frontend)
-- [ ] Implement backend endpoints:
-  - [ ] `POST /api/files/create` (handle file vs folder).
-  - [ ] `PATCH /api/files/rename`.
-- [ ] Implement Material 3 FAB menu in `App.vue` or `FileBrowser.vue`:
-  - [ ] Options for "New File" and "New Folder".
-  - [ ] MDUI Dialogs for naming new entries.
-- [ ] Implement rename functionality in file list item menus.
+- [x] Implement backend endpoints:
+  - [x] `POST /api/files/create` (handle file vs folder).
+  - [x] `PATCH /api/files/rename`.
+- [x] Implement Material 3 FAB menu in `App.vue` or `FileBrowser.vue`:
+  - [x] Options for "New File" and "New Folder".
+  - [x] MDUI Dialogs for naming new entries.
+- [x] Implement rename functionality in file list item menus.
 
 ## Stage 3: Delete & Undo logic
-- [ ] Implement `DELETE /api/files/delete` endpoint on backend.
-- [ ] Implement deletion in frontend:
-  - [ ] Immediate deletion with a "Deleted" snackbar.
-  - [ ] "Undo" button in snackbar that triggers a restore (may require temporary server-side trash or frontend-stored content).
-- [ ] Refine "Undo" strategy (e.g., delay actual server-side deletion until snackbar disappears).
+- [x] Implement `DELETE /api/files/delete` endpoint on backend.
+- [x] Implement deletion in frontend:
+  - [x] Immediate deletion with a "Deleted" snackbar.
+  - [x] "Undo" button in snackbar that triggers a restore (may require temporary server-side trash or frontend-stored content).
+- [x] Refine "Undo" strategy (e.g., delay actual server-side deletion until snackbar disappears).
 
 ## Stage 4: Read-only Mode & Polish
-- [ ] Ensure all modification UI (FAB, Edit mode, Rename/Delete menus) is hidden when `config.readonly` is true.
-- [ ] Add loading indicators and error handling for all file operations.
+- [x] Ensure all modification UI (FAB, Edit mode, Rename/Delete menus) is hidden when `config.readonly` is true.
+- [x] Add loading indicators and error handling for all file operations.
