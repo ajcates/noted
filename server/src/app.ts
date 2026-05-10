@@ -49,8 +49,8 @@ export function createApp(config: AppConfig) {
   const filesRouter = createFilesRouter(config);
   app.use(filesRouter.routes()).use(filesRouter.allowedMethods());
 
-  // Static files (Placeholder for frontend build)
-  const staticPath = path.resolve(__dirname, '../../frontend/dist');
+  // Static files
+  const staticPath = path.resolve(__dirname, process.env.NODE_ENV === 'production' ? './public' : '../../frontend/dist');
   app.use(serve(staticPath));
 
   return app;

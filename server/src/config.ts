@@ -28,13 +28,21 @@ export async function loadConfig(cliOptions: any, rootDir: string): Promise<AppC
     }
   }
 
+  const readonly = cliOptions.readonly !== undefined 
+    ? cliOptions.readonly 
+    : (process.env.READ_ONLY === 'true' || DEFAULT_CONFIG.readonly);
+
+  const incrementPort = cliOptions.incrementPort !== undefined 
+    ? cliOptions.incrementPort 
+    : (process.env.INCREMENT_PORT === 'true' || DEFAULT_CONFIG.incrementPort);
+
   // Priority: CLI > ENV > DEFAULTS
   const config: AppConfig = {
     rootPath: path.resolve(process.cwd(), rootDir),
     port: parseInt(cliOptions.port || process.env.PORT || DEFAULT_CONFIG.port!.toString(), 10),
     configPath: configPath,
-    readonly: cliOptions.readonly ?? (process.env.READ_ONLY === 'true') ?? DEFAULT_CONFIG.readonly!,
-    incrementPort: cliOptions.incrementPort ?? (process.env.INCREMENT_PORT === 'true') ?? DEFAULT_CONFIG.incrementPort!,
+    readonly: !!readonly,
+    incrementPort: !!incrementPort,
     password: process.env.PASSWORD,
   };
 

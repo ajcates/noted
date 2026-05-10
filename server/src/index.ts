@@ -21,8 +21,8 @@ program
   .argument('[path]', 'path to the notes directory', '.')
   .option('-p, --port <number>', 'port to use', '6767')
   .option('-c, --config <path>', 'path to config file', 'config.env')
-  .option('-r, --readonly', 'run in read-only mode', false)
-  .option('--increment-port', 'automatically increment port if in use', false)
+  .option('-r, --readonly', 'run in read-only mode')
+  .option('--increment-port', 'automatically increment port if in use')
   .action(async (dirPath: string, options: NotedOptions) => {
     const config = await loadConfig(options, dirPath);
     
