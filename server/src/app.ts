@@ -5,6 +5,7 @@ import serve from 'koa-static';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { AppConfig } from './config.js';
+import { createFilesRouter } from './routes/files.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,7 +32,7 @@ export function createApp(config: AppConfig) {
     }
   });
 
-  // API Routes (Placeholder)
+  // API Routes
   router.get('/api/status', (ctx) => {
     ctx.body = {
       status: 'ok',
@@ -43,6 +44,10 @@ export function createApp(config: AppConfig) {
   });
 
   app.use(router.routes()).use(router.allowedMethods());
+
+  // Mount File System Routes
+  const filesRouter = createFilesRouter(config);
+  app.use(filesRouter.routes()).use(filesRouter.allowedMethods());
 
   // Static files (Placeholder for frontend build)
   const staticPath = path.resolve(__dirname, '../../frontend/dist');
