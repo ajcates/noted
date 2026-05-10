@@ -16,9 +16,7 @@ const handleEntryClick = (entry: any) => {
   if (entry.type === 'directory') {
     fileStore.navigate(entry.path);
   } else {
-    fileStore.addToRecent(entry);
-    // TODO: Open editor
-    console.log('Open file:', entry.path);
+    fileStore.openFile(entry);
   }
 };
 

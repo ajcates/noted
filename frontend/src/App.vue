@@ -1,25 +1,33 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import FileBrowser from '@/components/FileBrowser.vue';
+import Editor from '@/components/Editor.vue';
 
 import '@mdui/icons/menu.js';
 import '@mdui/icons/history.js';
 import '@mdui/icons/settings.js';
 import '@mdui/icons/insert-drive-file.js';
+import '@mdui/icons/arrow-back.js';
 
 const fileStore = useFileStore();
 const drawerOpen = ref(false);
+
+onMounted(() => {
+  fileStore.fetchStatus();
+});
 
 const toggleDrawer = () => {
   drawerOpen.value = !drawerOpen.value;
 };
 
+const closeEditor = () => {
+  fileStore.closeEditor();
+};
+
 const openRecent = (file: any) => {
-  fileStore.addToRecent(file);
-  // TODO: Open editor
-  console.log('Open recent file:', file.path);
+  fileStore.openFile(file);
   drawerOpen.value = false;
 };
 </script>
@@ -27,11 +35,16 @@ const openRecent = (file: any) => {
 <template>
   <mdui-layout>
     <mdui-top-app-bar>
-      <mdui-button-icon @click="toggleDrawer">
+      <mdui-button-icon v-if="!fileStore.isEditing" @click="toggleDrawer">
         <mdui-icon-menu></mdui-icon-menu>
       </mdui-button-icon>
+      <mdui-button-icon v-else @click="closeEditor">
+        <mdui-icon-arrow-back></mdui-icon-arrow-back>
+      </mdui-button-icon>
+      
       <div class="top-bar-content">
-        <Breadcrumbs />
+        <Breadcrumbs v-if="!fileStore.isEditing" />
+        <div v-else class="editor-title">{{ fileStore.currentFile?.name }}</div>
       </div>
     </mdui-top-app-bar>
 
@@ -65,7 +78,8 @@ const openRecent = (file: any) => {
     </mdui-navigation-drawer>
 
     <mdui-layout-main>
-      <FileBrowser />
+      <FileBrowser v-if="!fileStore.isEditing" />
+      <Editor v-else />
     </mdui-layout-main>
   </mdui-layout>
 </template>
@@ -76,6 +90,10 @@ const openRecent = (file: any) => {
   display: flex;
   align-items: center;
   margin-left: 8px;
+}
+.editor-title {
+  font-size: 18px;
+  font-weight: bold;
 }
 .subheader-icon {
   font-size: 18px;

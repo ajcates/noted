@@ -2,6 +2,8 @@ import Koa from 'koa';
 import Router from '@koa/router';
 import logger from 'koa-logger';
 import serve from 'koa-static';
+import cors from '@koa/cors';
+import { koaBody } from 'koa-body';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { AppConfig } from './config.js';
@@ -15,6 +17,8 @@ export function createApp(config: AppConfig) {
 
   // Middleware
   app.use(logger());
+  app.use(cors());
+  app.use(koaBody());
 
   // Error handling
   app.use(async (ctx, next) => {
