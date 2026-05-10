@@ -84,6 +84,39 @@ export const useFileStore = defineStore('file', {
         await this.fetchFiles(this.currentPath);
       } catch (err: any) {
         this.error = err.message || 'Failed to delete entry';
+        // If it was an optimistic delete, we'd need to restore here
+        await this.fetchFiles(this.currentPath);
+      }
+    },
+    // Optimistic delete with undo support
+    async deleteEntryWithUndo(file: FileMetadata) {
+      const originalFiles = [...this.files];
+      this.files = this.files.filter(f => f.path !== file.path);
+      
+      return new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(async () => {
+          try {
+            await filesApi.delete(file.path);
+            resolve(true);
+          } catch (err: any) {
+            this.error = err.message || 'Failed to delete entry';
+            this.files = originalFiles;
+            resolve(false);
+          }
+        }, 5000); // 5 second window for undo
+
+        // We return a function to cancel the deletion
+        (this as any)._cancelDelete = () => {
+          clearTimeout(timeout);
+          this.files = originalFiles;
+          resolve(false);
+        };
+      });
+    },
+    cancelDelete() {
+      if ((this as any)._cancelDelete) {
+        (this as any)._cancelDelete();
+        (this as any)._cancelDelete = null;
       }
     },
     closeEditor() {

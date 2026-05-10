@@ -29,9 +29,10 @@ onMounted(() => {
       extensions: [
         basicSetup,
         oneDark,
+        EditorState.readOnly.of(fileStore.readonly),
         getLanguage(fileStore.currentFile?.name || ''),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
+          if (update.docChanged && !fileStore.readonly) {
             debouncedSave(update.state.doc.toString());
           }
         }),

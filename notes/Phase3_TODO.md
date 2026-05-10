@@ -1,12 +1,12 @@
 # TODO: Phase 3 - File Operations & Basic Editing
 
 ## Stage 1: File Content API & Editor (Frontend)
-- [ ] Implement `PUT /api/files/write` endpoint on backend.
-- [ ] Install CodeMirror dependencies in frontend: `codemirror`, `@codemirror/view`, `@codemirror/state`, `@codemirror/language`.
-- [ ] Create `Editor.vue` component:
-  - [ ] Integrate CodeMirror.
-  - [ ] Implement auto-save logic (debounced save to API).
-- [ ] Implement navigation from `FileBrowser.vue` to `Editor.vue` when a file is clicked.
+- [x] Implement `PUT /api/files/write` endpoint on backend.
+- [x] Install CodeMirror dependencies in frontend: `codemirror`, `@codemirror/view`, `@codemirror/state`, `@codemirror/language`.
+- [x] Create `Editor.vue` component:
+  - [x] Integrate CodeMirror.
+  - [x] Implement auto-save logic (debounced save to API).
+- [x] Implement navigation from `FileBrowser.vue` to `Editor.vue` when a file is clicked.
 
 ## Stage 2: Create & Rename (Backend & Frontend)
 - [ ] Implement backend endpoints:

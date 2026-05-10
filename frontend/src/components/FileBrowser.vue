@@ -1,15 +1,30 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
 
 import '@mdui/icons/folder.js';
 import '@mdui/icons/insert-drive-file.js';
 import '@mdui/icons/arrow-back.js';
+import '@mdui/icons/add.js';
+import '@mdui/icons/note-add.js';
+import '@mdui/icons/create-new-folder.js';
+import '@mdui/icons/more-vert.js';
+import '@mdui/icons/edit.js';
+import '@mdui/icons/delete.js';
 
 const fileStore = useFileStore();
 
+// Dialog & Input states
+const createDialogOpen = ref(false);
+const createType = ref<'file' | 'directory'>('file');
+const createName = ref('');
+
+const renameDialogOpen = ref(false);
+const renameOldPath = ref('');
+const renameNewName = ref('');
+
 onMounted(() => {
-  fileStore.fetchFiles();
+  fileStore.fetchFiles(fileStore.currentPath);
 });
 
 const handleEntryClick = (entry: any) => {
@@ -28,6 +43,46 @@ const goBack = () => {
   } else if (fileStore.currentPath !== '.') {
     fileStore.navigate('.');
   }
+};
+
+const openCreateDialog = (type: 'file' | 'directory') => {
+  createType.value = type;
+  createName.value = '';
+  createDialogOpen.value = true;
+};
+
+const confirmCreate = async () => {
+  if (createName.value.trim()) {
+    await fileStore.createFile(createName.value.trim(), createType.value);
+    createDialogOpen.value = false;
+  }
+};
+
+const openRenameDialog = (entry: any) => {
+  renameOldPath.value = entry.path;
+  renameNewName.value = entry.name;
+  renameDialogOpen.value = true;
+};
+
+const confirmRename = async () => {
+  if (renameNewName.value.trim() && renameNewName.value !== renameOldPath.value.split('/').pop()) {
+    await fileStore.renameEntry(renameOldPath.value, renameNewName.value.trim());
+    renameDialogOpen.value = false;
+  }
+};
+
+const deleteSnackbarOpen = ref(false);
+const deletedFileName = ref('');
+
+const handleDelete = async (entry: any) => {
+  deletedFileName.value = entry.name;
+  deleteSnackbarOpen.value = true;
+  await fileStore.deleteEntryWithUndo(entry);
+};
+
+const undoDelete = () => {
+  fileStore.cancelDelete();
+  deleteSnackbarOpen.value = false;
 };
 </script>
 
@@ -52,10 +107,28 @@ const goBack = () => {
       >
         <mdui-icon-folder v-if="file.type === 'directory'" slot="icon"></mdui-icon-folder>
         <mdui-icon-insert-drive-file v-else slot="icon"></mdui-icon-insert-drive-file>
+        
         {{ file.name }}
+        
         <div slot="description" v-if="file.type === 'file'">
           {{ (file.size / 1024).toFixed(2) }} KB
         </div>
+
+        <mdui-dropdown v-if="!fileStore.readonly" slot="end-icon" stop-propagation>
+          <mdui-button-icon slot="trigger">
+            <mdui-icon-more-vert></mdui-icon-more-vert>
+          </mdui-button-icon>
+          <mdui-menu>
+            <mdui-menu-item @click="openRenameDialog(file)">
+              <mdui-icon-edit slot="icon"></mdui-icon-edit>
+              Rename
+            </mdui-menu-item>
+            <mdui-menu-item @click="handleDelete(file)" class="delete-item">
+              <mdui-icon-delete slot="icon"></mdui-icon-delete>
+              Delete
+            </mdui-menu-item>
+          </mdui-menu>
+        </mdui-dropdown>
       </mdui-list-item>
     </mdui-list>
 
@@ -63,7 +136,67 @@ const goBack = () => {
       No files found in this directory.
     </div>
 
-    <mdui-snackbar v-if="fileStore.error" open>
+    <!-- FAB for Creation -->
+    <div v-if="!fileStore.readonly" class="fab-container">
+      <mdui-dropdown placement="top-end">
+        <mdui-fab slot="trigger" icon="add" extended>
+          <mdui-icon-add slot="icon"></mdui-icon-add>
+          Create
+        </mdui-fab>
+        <mdui-menu>
+          <mdui-menu-item @click="openCreateDialog('file')">
+            <mdui-icon-note-add slot="icon"></mdui-icon-note-add>
+            New File
+          </mdui-menu-item>
+          <mdui-menu-item @click="openCreateDialog('directory')">
+            <mdui-icon-create-new-folder slot="icon"></mdui-icon-create-new-folder>
+            New Folder
+          </mdui-menu-item>
+        </mdui-menu>
+      </mdui-dropdown>
+    </div>
+
+    <!-- Create Dialog -->
+    <mdui-dialog 
+      :open="createDialogOpen" 
+      @overlay-click="createDialogOpen = false"
+      :headline="createType === 'file' ? 'New File' : 'New Folder'"
+    >
+      <mdui-text-field 
+        v-model="createName" 
+        :label="createType === 'file' ? 'File Name' : 'Folder Name'"
+        autofocus
+        @keyup.enter="confirmCreate"
+      ></mdui-text-field>
+      <mdui-button slot="action" variant="text" @click="createDialogOpen = false">Cancel</mdui-button>
+      <mdui-button slot="action" variant="filled" @click="confirmCreate">Create</mdui-button>
+    </mdui-dialog>
+
+    <!-- Rename Dialog -->
+    <mdui-dialog 
+      :open="renameDialogOpen" 
+      @overlay-click="renameDialogOpen = false"
+      headline="Rename"
+    >
+      <mdui-text-field 
+        v-model="renameNewName" 
+        label="New Name"
+        autofocus
+        @keyup.enter="confirmRename"
+      ></mdui-text-field>
+      <mdui-button slot="action" variant="text" @click="renameDialogOpen = false">Cancel</mdui-button>
+      <mdui-button slot="action" variant="filled" @click="confirmRename">Rename</mdui-button>
+    </mdui-dialog>
+
+    <mdui-snackbar 
+      :open="deleteSnackbarOpen" 
+      @closed="deleteSnackbarOpen = false"
+    >
+      Deleted {{ deletedFileName }}
+      <mdui-button slot="action" variant="text" @click="undoDelete">Undo</mdui-button>
+    </mdui-snackbar>
+
+    <mdui-snackbar v-if="fileStore.error" open @closed="fileStore.error = null">
       {{ fileStore.error }}
     </mdui-snackbar>
   </div>
@@ -72,6 +205,9 @@ const goBack = () => {
 <style scoped>
 .file-browser {
   padding: 8px;
+  padding-bottom: 80px; /* Space for FAB */
+  position: relative;
+  min-height: calc(100vh - 64px);
 }
 .empty-state {
   text-align: center;
@@ -80,5 +216,14 @@ const goBack = () => {
 }
 .back-item {
   opacity: 0.8;
+}
+.fab-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+}
+.delete-item {
+  color: rgb(var(--mdui-color-error));
 }
 </style>
