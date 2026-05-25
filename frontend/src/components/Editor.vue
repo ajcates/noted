@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, computed } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
 import debounce from 'lodash/debounce';
+import { marked } from 'marked';
 import BottomBar from './BottomBar.vue';
 import { aiApi } from '@/api';
 
@@ -11,6 +12,7 @@ import '@mdui/icons/find-replace.js';
 import '@mdui/icons/keyboard-arrow-up.js';
 import '@mdui/icons/keyboard-arrow-down.js';
 import '@mdui/icons/visibility.js';
+import '@mdui/icons/description.js';
 import '@mdui/icons/text-fields.js';
 import '@mdui/icons/format-color-reset.js';
 import '@mdui/icons/border-color.js';
@@ -32,6 +34,7 @@ const localContent = ref(fileStore.currentContent);
 const isProcessingAI = ref(false);
 const selectedPrompt = ref('summarize');
 const readingMode = ref(false);
+const previewMode = ref(false);
 
 // Search & Replace state
 const searchOpen = ref(false);
@@ -47,6 +50,12 @@ const selectionEnd = ref(0);
 const debouncedSave = debounce((content: string) => {
   fileStore.saveFile(content);
 }, 1000);
+
+// Computed for rendered HTML
+const renderedHtml = computed(() => {
+  const content = localContent.value.replace(/==(.*?)==/g, '<mark>$1</mark>');
+  return marked.parse(content);
+});
 
 // Detect if the caret is currently inside a ==highlight== block
 const isHighlighted = computed(() => {
@@ -377,7 +386,9 @@ watch(localContent, (newContent) => {
       </div>
     </div>
 
+    <div v-if="previewMode" class="preview-container" v-html="renderedHtml"></div>
     <textarea
+      v-else
       ref="textareaRef"
       v-model="localContent"
       :readonly="fileStore.readonly || readingMode"
@@ -389,8 +400,22 @@ watch(localContent, (newContent) => {
       @select="updateSelection"
     ></textarea>
     
-    <Teleport v-if="!readingMode" to="#top-bar-actions">
+    <Teleport v-if="!readingMode && !previewMode" to="#top-bar-actions">
       <div class="editor-top-actions">
+        <!-- Preview Mode -->
+        <mdui-button-icon 
+          @click="previewMode = true"
+          tooltip="Preview"
+          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
+          tabindex="-1"
+          @pointerdown.prevent
+          @mousedown.prevent
+        >
+          <mdui-icon-description></mdui-icon-description>
+        </mdui-button-icon>
+
+        <div class="top-divider"></div>
+
         <!-- Reading Mode -->
         <mdui-button-icon 
           @click="readingMode = true"
@@ -513,8 +538,8 @@ watch(localContent, (newContent) => {
       </div>
     </Teleport>
 
-    <div v-if="readingMode" class="reading-mode-fab">
-      <mdui-fab @click="readingMode = false" size="small" style="background-color: #CDDC39; color: black;">
+    <div v-if="readingMode || previewMode" class="reading-mode-fab">
+      <mdui-fab @click="readingMode = false; previewMode = false" size="small" style="background-color: #CDDC39; color: black;">
         <mdui-icon-edit slot="icon"></mdui-icon-edit>
       </mdui-fab>
     </div>
@@ -530,6 +555,56 @@ watch(localContent, (newContent) => {
   position: relative;
   transition: padding 0.3s;
 }
+.preview-container {
+  flex-grow: 1;
+  width: 100%;
+  padding: 24px;
+  overflow-y: auto;
+  background-color: rgb(var(--mdui-color-background));
+  color: rgb(var(--mdui-color-on-background));
+  line-height: 1.6;
+  font-family: system-ui, -apple-system, sans-serif;
+  box-sizing: border-box;
+}
+
+/* Basic Markdown Styling */
+.preview-container :deep(h1), .preview-container :deep(h2), .preview-container :deep(h3) {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  color: #CDDC39;
+}
+.preview-container :deep(p) {
+  margin-bottom: 1em;
+}
+.preview-container :deep(code) {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: 'Fira Code', monospace;
+}
+.preview-container :deep(pre) {
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+.preview-container :deep(blockquote) {
+  border-left: 4px solid #CDDC39;
+  margin: 0;
+  padding-left: 16px;
+  opacity: 0.8;
+}
+.preview-container :deep(mark) {
+  background-color: #CDDC39;
+  color: black;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+.preview-container :deep(img) {
+  max-width: 100%;
+}
+
 .editor-top-actions {
   display: flex;
   align-items: center;

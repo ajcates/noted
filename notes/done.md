@@ -21,3 +21,5 @@
 - Added **Reading Mode** with a minimalist focus-oriented interface.
 - Refined the **Smarter Highlight Removal** to accurately target cursor-selected markers.
 - Added **Tooltips** and consolidated slots to the editor's bottom toolbar.
+- Made **Port Incrementing** the default behavior and added `--no-increment-port` to disable it.
+- Implemented **Markdown Preview** in the editor toolbar using the `marked` library, with support for `==highlight==` syntax.

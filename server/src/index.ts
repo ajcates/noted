@@ -23,7 +23,7 @@ program
   .option('-p, --port <number>', 'port to use', '6767')
   .option('-c, --config <path>', 'path to config file', 'config.env')
   .option('-r, --readonly', 'run in read-only mode')
-  .option('--increment-port', 'automatically increment port if in use')
+  .option('--no-increment-port', 'do not automatically increment port if in use')
   .action(async (dirPath: string, options: NotedOptions) => {
     const config = await loadConfig(options, dirPath);
     
@@ -55,7 +55,7 @@ program
 
     while (!(await isPortAvailable(port))) {
       if (!config.incrementPort) {
-        console.error(`Error: Port ${port} is already in use. Use --increment-port to find an available port.`);
+        console.error(`Error: Port ${port} is already in use.`);
         process.exit(1);
       }
       

@@ -14,7 +14,7 @@ export interface AppConfig {
 export const DEFAULT_CONFIG: Partial<AppConfig> = {
   port: 6767,
   readonly: false,
-  incrementPort: false,
+  incrementPort: true,
 };
 
 export async function loadConfig(cliOptions: any, rootDir: string): Promise<AppConfig> {
