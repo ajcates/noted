@@ -1,0 +1,1 @@
+Summarize the following text concisely, highlighting the key points.

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Command } from 'commander';
 import path from 'path';
 import net from 'net';
@@ -70,10 +71,31 @@ program
     // Update config with final port
     config.port = port;
 
-    const app = createApp(config);
+    const { httpServer } = createApp(config);
     
-    app.listen(config.port, () => {
-      console.log(`\n🚀 noted is running!`);
+    // Try to read build number from version.json
+    let buildNumber = 'unknown';
+    try {
+      // Look for version.json in parent directories up to 2 levels
+      const possiblePaths = [
+        path.join(process.cwd(), 'version.json'),
+        path.join(path.dirname(new URL(import.meta.url).pathname), '../../version.json'),
+        path.join(path.dirname(new URL(import.meta.url).pathname), '../../../version.json')
+      ];
+      
+      for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+          const versionData = fs.readJsonSync(p);
+          buildNumber = versionData.build;
+          break;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    httpServer.listen(config.port, () => {
+      console.log(`\n🚀 noted is running! (Build: ${buildNumber})`);
       console.log(`----------------------------------`);
       console.log(`Directory:  ${config.rootPath}`);
       console.log(`Port:       ${config.port}`);

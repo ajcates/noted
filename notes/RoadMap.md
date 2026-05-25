@@ -45,3 +45,24 @@ This roadmap outlines the phased development of the `noted` project. Each phase 
 - Conduct comprehensive testing of sync and edge cases.
 - Optimize performance and PWA manifest.
 - Final UI/UX polish and bug fixes.
+
+## Phase 8: Editor Enhancements & AI Integration
+**Goal:** Provide advanced editing tools and AI-powered assistance.
+- Implement consolidated bottom app bar for editor actions.
+- Add text transformation tools (Header, List, Link, Highlight).
+- Integrate AI prompt system for content generation and refinement.
+- Implement auto-formatting and advanced undo/redo logic.
+
+## Phase 9: Search, Multi-Level Settings & Organization
+**Goal:** Improve discovery and flexible configuration.
+- Implement IndexedDB-powered local search in the frontend.
+- Build a multi-level Settings system (Browser vs. Folder vs. System).
+- Implement "Unsaved" state indicators for configuration changes.
+- Add long-press multi-selection and bulk file operations.
+
+## Phase 10: Advanced Markdown Editor (Pen Integration)
+**Goal:** Implement a sophisticated, minimalist Markdown editing experience.
+- Integrate logic inspired by the `Pen` editor for seamless Markdown styling.
+- Implement a floating toolbar/hint system for selections.
+- Add real-time Markdown preview and polished typography.
+- Integrate Google Gemini 1.5 Flash for high-speed AI assistance.

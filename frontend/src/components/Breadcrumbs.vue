@@ -41,14 +41,14 @@ const navigate = (path: string) => {
 .breadcrumbs {
   display: flex;
   align-items: center;
-  font-size: 18px;
+  font-size: 14px;
   overflow-x: auto;
   white-space: nowrap;
-  padding: 0 8px;
+  padding: 0 4px;
 }
 .crumb {
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
   transition: background 0.2s;
 }

@@ -14,7 +14,7 @@
 
 ## Technical Highlights
 - **Backend:** Node.js, Koa, Socket.io, Chokidar.
-- **Frontend:** Vue 3, Pinia, CodeMirror 6, Dexie.js, MDUI v2.
+- **Frontend:** Vue 3, Pinia, Dexie.js, MDUI v2.
 - **Optimization:** Debounced broadcasts, delta caching, and efficient asset management.
 
 ## Conclusion

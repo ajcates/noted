@@ -3,7 +3,16 @@
   "version": "1.0.0",
   "description": "A node.js based note editor th",
   "main": "index.js",
+  "workspaces": [
+    "frontend",
+    "server"
+  ],
   "scripts": {
+    "increment-build": "node scripts/increment-build.js",
+    "build:frontend": "npm run build --workspace=frontend",
+    "build:server": "npm run build --workspace=server",
+    "build": "npm run increment-build && npm run build:server && npm run build:frontend",
+    "install-global": "npm install && npm run build && cd server && npm install -g .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

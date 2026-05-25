@@ -12,3 +12,12 @@
 - Scaffolded Vue 3 + TypeScript + Pinia frontend.\n- Integrated MDUI v2 with AMOLED dark theme.\n- Built UI shell with Top Bar (Breadcrumbs) and Navigation Drawer (Recents/Settings).\n- Implemented File Browser component with directory navigation.\n- Configured integrated build and static serving.
 - Implemented `PUT /api/files/write`, `POST /api/files/create`, `PATCH /api/files/rename`, and `DELETE /api/files/delete` on backend.\n- Integrated CodeMirror in frontend with auto-save (debounced).\n- Added file opening logic and navigation between browser and editor.\n- Supported basic syntax highlighting for Markdown and JavaScript.
 - Implemented full CRUD operations on backend.\n- Integrated CodeMirror 6 with debounced auto-save.\n- Added Material 3 style FAB for file/folder creation.\n- Implemented Rename and Deletion with Snackbar Undo (optimistic UI).\n- Hidden modification UI in Read-only mode and set editor to read-only.
+- Implemented AI Integration (Phase 8 Stage 3) with backend `POST /api/ai/process` endpoint.
+- Consolidated Text Actions menu in bottom app bar.
+- Added Markdown Character Escaping tool.
+- Improved highlight removal logic and mobile keyboard persistence.
+- Corrected AMOLED theme RGB variable usage in CSS.
+- Implemented **Search & Replace** within the note editor with result counting and navigation.
+- Added **Reading Mode** with a minimalist focus-oriented interface.
+- Refined the **Smarter Highlight Removal** to accurately target cursor-selected markers.
+- Added **Tooltips** and consolidated slots to the editor's bottom toolbar.

@@ -1,16 +1,14 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import 'mdui/mdui.css'
-import 'mdui'
-import { setTheme } from 'mdui'
-import App from './App.vue'
-
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import 'mdui/mdui.css';
+import 'mdui';
+import { setTheme } from 'mdui';
+import App from './App.vue';
 // Set AMOLED Dark Theme
-setTheme('dark')
-document.documentElement.classList.add('mdui-theme-dark')
-
+setTheme('dark');
+document.documentElement.classList.add('mdui-theme-dark');
 // Custom AMOLED background
-const style = document.createElement('style')
+const style = document.createElement('style');
 style.textContent = `
   :root.mdui-theme-dark {
     --mdui-color-background: 0, 0, 0;
@@ -26,9 +24,8 @@ style.textContent = `
     margin: 0;
     font-family: Roboto, sans-serif;
   }
-`
-document.head.appendChild(style)
-
-const app = createApp(App)
-app.use(createPinia())
-app.mount('#app')
+`;
+document.head.appendChild(style);
+const app = createApp(App);
+app.use(createPinia());
+app.mount('#app');

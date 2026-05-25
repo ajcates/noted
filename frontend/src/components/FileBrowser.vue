@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
 
 import '@mdui/icons/folder.js';
@@ -13,6 +13,15 @@ import '@mdui/icons/edit.js';
 import '@mdui/icons/delete.js';
 
 const fileStore = useFileStore();
+
+const sortedFiles = computed(() => {
+  return [...fileStore.files].sort((a, b) => {
+    if (a.type === b.type) {
+      return a.name.localeCompare(b.name);
+    }
+    return a.type === 'directory' ? -1 : 1;
+  });
+});
 
 // Dialog & Input states
 const createDialogOpen = ref(false);
@@ -90,47 +99,51 @@ const undoDelete = () => {
   <div class="file-browser">
     <mdui-linear-progress v-if="fileStore.loading"></mdui-linear-progress>
     
-    <mdui-list>
-      <mdui-list-item 
-        v-if="fileStore.currentPath !== '.'" 
-        @click="goBack"
-        class="back-item"
-      >
-        <mdui-icon-arrow-back slot="icon"></mdui-icon-arrow-back>
-        ..
-      </mdui-list-item>
+    <div class="list-surface">
+      <mdui-list style="background-color: transparent;">
+        <mdui-list-item 
+          v-if="fileStore.currentPath !== '.'" 
+          @click="goBack"
+          class="back-item"
+          ripple
+        >
+          <mdui-icon-arrow-back slot="icon"></mdui-icon-arrow-back>
+          ..
+        </mdui-list-item>
 
-      <mdui-list-item 
-        v-for="file in fileStore.files" 
-        :key="file.path"
-        @click="handleEntryClick(file)"
-      >
-        <mdui-icon-folder v-if="file.type === 'directory'" slot="icon"></mdui-icon-folder>
-        <mdui-icon-insert-drive-file v-else slot="icon"></mdui-icon-insert-drive-file>
-        
-        {{ file.name }}
-        
-        <div slot="description" v-if="file.type === 'file'">
-          {{ (file.size / 1024).toFixed(2) }} KB
-        </div>
+        <mdui-list-item 
+          v-for="file in sortedFiles" 
+          :key="file.path"
+          @click="handleEntryClick(file)"
+          ripple
+        >
+          <mdui-icon-folder v-if="file.type === 'directory'" slot="icon"></mdui-icon-folder>
+          <mdui-icon-insert-drive-file v-else slot="icon"></mdui-icon-insert-drive-file>
+          
+          {{ file.name }}
+          
+          <div slot="description" v-if="file.type === 'file'">
+            {{ (file.size / 1024).toFixed(2) }} KB
+          </div>
 
-        <mdui-dropdown v-if="!fileStore.readonly" slot="end-icon" stop-propagation>
-          <mdui-button-icon slot="trigger">
-            <mdui-icon-more-vert></mdui-icon-more-vert>
-          </mdui-button-icon>
-          <mdui-menu>
-            <mdui-menu-item @click="openRenameDialog(file)">
-              <mdui-icon-edit slot="icon"></mdui-icon-edit>
-              Rename
-            </mdui-menu-item>
-            <mdui-menu-item @click="handleDelete(file)" class="delete-item">
-              <mdui-icon-delete slot="icon"></mdui-icon-delete>
-              Delete
-            </mdui-menu-item>
-          </mdui-menu>
-        </mdui-dropdown>
-      </mdui-list-item>
-    </mdui-list>
+          <mdui-dropdown v-if="!fileStore.readonly" slot="end-icon" @click.stop>
+            <mdui-button-icon slot="trigger">
+              <mdui-icon-more-vert></mdui-icon-more-vert>
+            </mdui-button-icon>
+            <mdui-menu>
+              <mdui-menu-item @click="openRenameDialog(file)">
+                <mdui-icon-edit slot="icon"></mdui-icon-edit>
+                Rename
+              </mdui-menu-item>
+              <mdui-menu-item @click="handleDelete(file)" class="delete-item">
+                <mdui-icon-delete slot="icon"></mdui-icon-delete>
+                Delete
+              </mdui-menu-item>
+            </mdui-menu>
+          </mdui-dropdown>
+        </mdui-list-item>
+      </mdui-list>
+    </div>
 
     <div v-if="!fileStore.loading && fileStore.files.length === 0" class="empty-state">
       No files found in this directory.
@@ -139,7 +152,7 @@ const undoDelete = () => {
     <!-- FAB for Creation -->
     <div v-if="!fileStore.readonly" class="fab-container">
       <mdui-dropdown placement="top-end">
-        <mdui-fab slot="trigger" icon="add" extended>
+        <mdui-fab slot="trigger" icon="add" extended style="background-color: #CDDC39; color: black;">
           <mdui-icon-add slot="icon"></mdui-icon-add>
           Create
         </mdui-fab>
@@ -204,26 +217,68 @@ const undoDelete = () => {
 
 <style scoped>
 .file-browser {
-  padding: 8px;
-  padding-bottom: 80px; /* Space for FAB */
+  padding: 16px;
+  padding-bottom: 72px; /* Space for FAB */
   position: relative;
-  min-height: calc(100vh - 64px);
+  min-height: calc(100dvh - 56px);
+  background-color: rgb(var(--mdui-color-surface));
+}
+.list-surface {
+  background-color: rgb(var(--mdui-color-surface-container-highest));
+  border-radius: 16px;
+  box-shadow: var(--mdui-elevation-level2);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 .empty-state {
   text-align: center;
-  padding: 32px;
+  padding: 48px 32px;
   opacity: 0.6;
+  font-size: 14px;
 }
 .back-item {
   opacity: 0.8;
 }
 .fab-container {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 16px;
+  right: 16px;
   z-index: 100;
 }
 .delete-item {
   color: rgb(var(--mdui-color-error));
+}
+
+mdui-list-item {
+  --mdui-list-item-height: 48px;
+  font-size: 14px;
+}
+
+mdui-menu-item {
+  --mdui-menu-item-height: 40px;
+  font-size: 14px;
+  line-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+/* Ensure MDUI menu item inner parts don't clip */
+mdui-menu-item::part(label) {
+  line-height: 1.2;
+  padding: 4px 0;
+}
+
+/* List Transitions */
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.3s ease;
+}
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: translateX(30px);
+}
+.list-move {
+  transition: transform 0.3s ease;
 }
 </style>

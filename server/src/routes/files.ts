@@ -15,13 +15,17 @@ export function createFilesRouter(config: AppConfig) {
     const targetPath = resolveSafePath(config.rootPath, relativePath);
 
     const entries = await fs.readdir(targetPath);
+    console.log(`Listing directory: ${targetPath}, found entries:`, entries);
+    
     const filteredEntries = entries.filter(entry => !IGNORE_LIST.includes(entry));
 
     const metadataPromises = filteredEntries.map(entry => 
       getMetadata(config.rootPath, resolveSafePath(targetPath, entry))
     );
 
-    ctx.body = await Promise.all(metadataPromises);
+    const metadata = await Promise.all(metadataPromises);
+    console.log(`Returning metadata for ${metadata.length} entries`);
+    ctx.body = metadata;
   });
 
   /**
@@ -51,7 +55,7 @@ export function createFilesRouter(config: AppConfig) {
   router.put('/write', async (ctx) => {
     if (config.readonly) ctx.throw(403, 'Server is in read-only mode');
 
-    const { path: relativePath, content } = ctx.request.body;
+    const { path: relativePath, content } = ctx.request.body as any;
     if (!relativePath) ctx.throw(400, 'Path is required');
 
     const targetPath = resolveSafePath(config.rootPath, relativePath);
@@ -66,7 +70,7 @@ export function createFilesRouter(config: AppConfig) {
   router.post('/create', async (ctx) => {
     if (config.readonly) ctx.throw(403, 'Server is in read-only mode');
 
-    const { path: relativePath, type } = ctx.request.body;
+    const { path: relativePath, type } = ctx.request.body as any;
     if (!relativePath) ctx.throw(400, 'Path is required');
 
     const targetPath = resolveSafePath(config.rootPath, relativePath);
@@ -86,7 +90,7 @@ export function createFilesRouter(config: AppConfig) {
   router.patch('/rename', async (ctx) => {
     if (config.readonly) ctx.throw(403, 'Server is in read-only mode');
 
-    const { oldPath, newPath } = ctx.request.body;
+    const { oldPath, newPath } = ctx.request.body as any;
     if (!oldPath || !newPath) ctx.throw(400, 'Both oldPath and newPath are required');
 
     const oldTargetPath = resolveSafePath(config.rootPath, oldPath);
@@ -103,7 +107,7 @@ export function createFilesRouter(config: AppConfig) {
   router.delete('/delete', async (ctx) => {
     if (config.readonly) ctx.throw(403, 'Server is in read-only mode');
 
-    const { path: relativePath } = ctx.request.body;
+    const { path: relativePath } = ctx.request.body as any;
     if (!relativePath) ctx.throw(400, 'Path is required');
 
     const targetPath = resolveSafePath(config.rootPath, relativePath);

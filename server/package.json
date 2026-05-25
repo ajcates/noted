@@ -1,8 +1,11 @@
 {
-  "name": "server",
+  "name": "noted-editor",
   "version": "1.0.0",
-  "description": "",
+  "description": "Mobile-optimized note editor",
   "type": "module",
+  "bin": {
+    "noted": "./dist/index.js"
+  },
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
@@ -15,17 +18,23 @@
   "dependencies": {
     "@koa/cors": "^5.0.0",
     "@koa/router": "^15.5.0",
+    "chokidar": "^5.0.0",
     "commander": "^14.0.3",
+    "cookie": "^1.1.1",
     "dotenv": "^17.4.2",
     "fs-extra": "^11.3.5",
+    "jsonwebtoken": "^9.0.3",
     "koa": "^3.2.0",
     "koa-body": "^7.0.1",
     "koa-logger": "^4.0.0",
-    "koa-static": "^5.0.0"
+    "koa-static": "^5.0.0",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@types/cookie": "^0.6.0",
     "@types/dotenv": "^6.1.1",
     "@types/fs-extra": "^11.0.4",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/koa": "^3.0.2",
     "@types/koa__cors": "^5.0.1",
     "@types/koa__router": "^12.0.5",
