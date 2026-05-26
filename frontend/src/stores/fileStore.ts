@@ -3,10 +3,14 @@ import { io } from 'socket.io-client';
 import { filesApi, FileMetadata } from '@/api';
 import { db } from '@/utils/db';
 
+type SortBy = 'name' | 'mtime' | 'size';
+
 export const useFileStore = defineStore('file', {
   state: () => ({
     currentPath: '.' as string,
     files: [] as FileMetadata[],
+    sortBy: (localStorage.getItem('sortBy') || 'name') as SortBy,
+    sortDesc: localStorage.getItem('sortDesc') === 'true',
     recentFiles: [] as FileMetadata[],
     currentFile: null as FileMetadata | null,
     currentContent: '' as string,
@@ -330,6 +334,16 @@ export const useFileStore = defineStore('file', {
           this.recentFiles.pop();
         }
       }
+    },
+    setSort(by: SortBy) {
+      if (this.sortBy === by) {
+        this.sortDesc = !this.sortDesc;
+      } else {
+        this.sortBy = by;
+        this.sortDesc = false; // default ascending when changing sort type
+      }
+      localStorage.setItem('sortBy', this.sortBy);
+      localStorage.setItem('sortDesc', String(this.sortDesc));
     },
   },
 });
