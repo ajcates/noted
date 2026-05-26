@@ -248,6 +248,7 @@ const handleRunPrompt = async () => {
     }
   } catch (e: any) {
     console.error('AI processing failed', e);
+    alert('AI processing failed. Please try again.');
   } finally {
     isProcessingAI.value = false;
     textareaRef.value?.focus();

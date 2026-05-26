@@ -1,8 +1,14 @@
 import Router from '@koa/router';
 import { AppConfig } from '../config.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 export function createAiRouter(config: AppConfig) {
   const router = new Router({ prefix: '/api/ai' });
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
 
   /**
    * Process text with AI.
@@ -15,31 +21,33 @@ export function createAiRouter(config: AppConfig) {
       ctx.throw(400, 'Text is required');
     }
 
-    // This is a placeholder for actual LLM integration.
-    // In a real scenario, you'd call OpenAI, Anthropic, or a local model here.
-    
-    let result = '';
+    let promptPrefix = '';
     switch (promptId) {
       case 'summarize':
-        result = `[Summary]: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}\n\n(AI Summarization placeholder)`;
+        promptPrefix = 'Summarize the following text:\n\n';
         break;
       case 'fix_grammar':
-        result = text.replace(/ {2,}/g, ' ') + '\n\n(AI Grammar Fix placeholder)';
+        promptPrefix = 'Fix the grammar in the following text:\n\n';
         break;
       case 'professional':
-        result = `To whom it may concern,\n\n${text}\n\nSincerely,\nAI Assistant`;
+        promptPrefix = 'Rewrite the following text to make it sound professional:\n\n';
         break;
       case 'creative':
-        result = `Once upon a time, in a world where notes edited themselves...\n\n${text}\n\nAnd they all lived happily ever after.`;
+        promptPrefix = 'Rewrite the following text to make it sound more creative and engaging:\n\n';
         break;
       default:
-        result = `[Processed by AI]: ${text}`;
+        promptPrefix = 'Process the following text:\n\n';
     }
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    ctx.body = { result };
+    try {
+      const result = await model.generateContent(promptPrefix + text);
+      const generatedText = result.response.text();
+      ctx.body = { result: generatedText };
+    } catch (error) {
+      console.error('Error calling Gemini API:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Failed to process AI request' };
+    }
   });
 
   return router;
