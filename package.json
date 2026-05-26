@@ -26,5 +26,9 @@
   "bugs": {
     "url": "https://github.com/ajcates/noted/issues"
   },
-  "homepage": "https://github.com/ajcates/noted#readme"
+  "homepage": "https://github.com/ajcates/noted#readme",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "dotenv": "^17.4.2"
+  }
 }

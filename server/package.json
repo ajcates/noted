@@ -16,6 +16,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@koa/cors": "^5.0.0",
     "@koa/router": "^15.5.0",
     "chokidar": "^5.0.0",
