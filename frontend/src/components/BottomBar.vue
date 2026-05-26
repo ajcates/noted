@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import '@mdui/icons/border-color.js';
 import '@mdui/icons/format-color-reset.js';
 import '@mdui/icons/smart-toy.js';
