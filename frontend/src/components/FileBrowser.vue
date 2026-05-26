@@ -11,17 +11,36 @@ import '@mdui/icons/create-new-folder.js';
 import '@mdui/icons/more-vert.js';
 import '@mdui/icons/edit.js';
 import '@mdui/icons/delete.js';
+import '@mdui/icons/sort.js';
+import '@mdui/icons/arrow-upward.js';
+import '@mdui/icons/arrow-downward.js';
 
 const fileStore = useFileStore();
 
 const sortedFiles = computed(() => {
   return [...fileStore.files].sort((a, b) => {
-    if (a.type === b.type) {
-      return a.name.localeCompare(b.name);
+    if (a.type !== b.type) {
+      return a.type === 'directory' ? -1 : 1;
     }
-    return a.type === 'directory' ? -1 : 1;
+
+    let comparison = 0;
+    if (fileStore.sortBy === 'name') {
+      comparison = a.name.localeCompare(b.name);
+    } else if (fileStore.sortBy === 'mtime') {
+      const timeA = a.mtime ? new Date(a.mtime).getTime() : 0;
+      const timeB = b.mtime ? new Date(b.mtime).getTime() : 0;
+      comparison = timeA - timeB;
+    } else if (fileStore.sortBy === 'size') {
+      comparison = (a.size || 0) - (b.size || 0);
+    }
+
+    return fileStore.sortDesc ? -comparison : comparison;
   });
 });
+
+const handleSort = (by: 'name' | 'mtime' | 'size') => {
+  fileStore.setSort(by);
+};
 
 // Dialog & Input states
 const createDialogOpen = ref(false);
@@ -96,6 +115,31 @@ const undoDelete = () => {
 </script>
 
 <template>
+  <Teleport to="#top-bar-actions">
+    <mdui-dropdown placement="bottom-end">
+      <mdui-button-icon slot="trigger" mdui-tooltip="Sort">
+        <mdui-icon-sort></mdui-icon-sort>
+      </mdui-button-icon>
+      <mdui-menu>
+        <mdui-menu-item @click="handleSort('name')">
+          Name
+          <mdui-icon-arrow-upward v-if="fileStore.sortBy === 'name' && !fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-upward>
+          <mdui-icon-arrow-downward v-if="fileStore.sortBy === 'name' && fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-downward>
+        </mdui-menu-item>
+        <mdui-menu-item @click="handleSort('mtime')">
+          Date
+          <mdui-icon-arrow-upward v-if="fileStore.sortBy === 'mtime' && !fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-upward>
+          <mdui-icon-arrow-downward v-if="fileStore.sortBy === 'mtime' && fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-downward>
+        </mdui-menu-item>
+        <mdui-menu-item @click="handleSort('size')">
+          Size
+          <mdui-icon-arrow-upward v-if="fileStore.sortBy === 'size' && !fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-upward>
+          <mdui-icon-arrow-downward v-if="fileStore.sortBy === 'size' && fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-downward>
+        </mdui-menu-item>
+      </mdui-menu>
+    </mdui-dropdown>
+  </Teleport>
+
   <div class="file-browser">
     <mdui-linear-progress v-if="fileStore.loading"></mdui-linear-progress>
     
