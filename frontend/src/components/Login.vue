@@ -14,6 +14,11 @@ const handleLogin = async () => {
     await authStore.login(password.value);
   }
 };
+
+defineExpose({
+  password,
+  handleLogin
+});
 </script>
 
 <template>

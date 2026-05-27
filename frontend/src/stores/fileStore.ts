@@ -22,6 +22,41 @@ export const useFileStore = defineStore('file', {
     isOnline: navigator.onLine,
     conflict: null as { serverContent: string, localContent: string } | null,
   }),
+  getters: {
+    sortedFiles(state) {
+      try {
+        return [...state.files].sort((a, b) => {
+          // 1. Directories always first
+          if (a.type !== b.type) {
+            return a.type === 'directory' ? -1 : 1;
+          }
+
+          let comparison = 0;
+          if (state.sortBy === 'name') {
+            comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+          } else if (state.sortBy === 'mtime') {
+            const timeA = a.mtime ? new Date(a.mtime).getTime() : 0;
+            const timeB = b.mtime ? new Date(b.mtime).getTime() : 0;
+            comparison = (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+          } else if (state.sortBy === 'size') {
+            comparison = (a.size || 0) - (b.size || 0);
+          }
+
+          // 2. Secondary sort by name (A-Z) for stability if primary comparison is equal or NaN
+          if ((comparison === 0 || isNaN(comparison)) && state.sortBy !== 'name') {
+            return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+          }
+
+          if (isNaN(comparison)) comparison = 0;
+
+          return state.sortDesc ? -comparison : comparison;
+        });
+      } catch (err) {
+        console.error('Error in sortedFiles getter:', err);
+        return state.files;
+      }
+    }
+  },
   actions: {
     init() {
       // WebSocket setup
@@ -340,7 +375,8 @@ export const useFileStore = defineStore('file', {
         this.sortDesc = !this.sortDesc;
       } else {
         this.sortBy = by;
-        this.sortDesc = false; // default ascending when changing sort type
+        // Default to descending (newest first / largest first) for mtime and size
+        this.sortDesc = (by === 'mtime' || by === 'size');
       }
       localStorage.setItem('sortBy', this.sortBy);
       localStorage.setItem('sortDesc', String(this.sortDesc));

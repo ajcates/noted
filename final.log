@@ -1,0 +1,13 @@
+◇ injected env (1) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+AI Router initialized. API Key present: true Length: 39
+
+🚀 noted is running! (Build: 44)
+----------------------------------
+Directory:  /data/data/com.termux/files/home/dev
+Port:       6767
+Read-only:  false
+Config:     /data/data/com.termux/files/home/dev/noted/config.env
+----------------------------------
+
+  <-- GET /api/status
+  --> GET /api/status 200 24ms 113b

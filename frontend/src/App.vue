@@ -15,10 +15,18 @@ import '@mdui/icons/insert-drive-file.js';
 import '@mdui/icons/arrow-back.js';
 import '@mdui/icons/logout.js';
 import '@mdui/icons/cloud-off.js';
+import '@mdui/icons/sort.js';
+import '@mdui/icons/arrow-upward.js';
+import '@mdui/icons/arrow-downward.js';
 
 const fileStore = useFileStore();
 const authStore = useAuthStore();
 const drawerOpen = ref(false);
+
+const handleSort = (by: 'name' | 'mtime' | 'size') => {
+  console.log('Sorting by:', by);
+  fileStore.setSort(by);
+};
 
 // Track transition direction
 const transitionName = ref('slide-right');
@@ -84,7 +92,30 @@ const buildNumber = __BUILD_NUMBER__;
         <div v-else class="editor-title">{{ fileStore.currentFile?.name }}</div>
       </div>
 
-      <div id="top-bar-actions" class="top-bar-actions"></div>
+      <div id="top-bar-actions" class="top-bar-actions">
+        <mdui-dropdown v-if="!fileStore.isEditing" placement="bottom-end">
+          <mdui-button-icon slot="trigger" mdui-tooltip="Sort">
+            <mdui-icon-sort></mdui-icon-sort>
+          </mdui-button-icon>
+          <mdui-menu :value="fileStore.sortBy">
+            <mdui-menu-item value="name" ripple :selected="fileStore.sortBy === 'name'" @click.stop="fileStore.setSort('name')">
+              Name
+              <mdui-icon-arrow-upward v-if="fileStore.sortBy === 'name' && !fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-upward>
+              <mdui-icon-arrow-downward v-if="fileStore.sortBy === 'name' && fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-downward>
+            </mdui-menu-item>
+            <mdui-menu-item value="mtime" ripple :selected="fileStore.sortBy === 'mtime'" @click.stop="fileStore.setSort('mtime')">
+              Date
+              <mdui-icon-arrow-upward v-if="fileStore.sortBy === 'mtime' && !fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-upward>
+              <mdui-icon-arrow-downward v-if="fileStore.sortBy === 'mtime' && fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-downward>
+            </mdui-menu-item>
+            <mdui-menu-item value="size" ripple :selected="fileStore.sortBy === 'size'" @click.stop="fileStore.setSort('size')">
+              Size
+              <mdui-icon-arrow-upward v-if="fileStore.sortBy === 'size' && !fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-upward>
+              <mdui-icon-arrow-downward v-if="fileStore.sortBy === 'size' && fileStore.sortDesc" slot="end-icon"></mdui-icon-arrow-downward>
+            </mdui-menu-item>
+          </mdui-menu>
+        </mdui-dropdown>
+      </div>
 
       <mdui-button-icon v-if="!fileStore.isOnline" class="offline-icon" mdui-tooltip="Offline" style="--mdui-button-icon-size: 40px;">
         <mdui-icon-cloud-off></mdui-icon-cloud-off>

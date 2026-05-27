@@ -5,6 +5,8 @@ import debounce from 'lodash/debounce';
 import { marked } from 'marked';
 import BottomBar from './BottomBar.vue';
 import { aiApi } from '@/api';
+import AIPanel from './AIPanel.vue';
+import '@mdui/icons/auto-awesome.js';
 
 import '@mdui/icons/close.js';
 import '@mdui/icons/search.js';
@@ -31,8 +33,7 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
 // Local state for the textarea
 const localContent = ref(fileStore.currentContent);
-const isProcessingAI = ref(false);
-const selectedPrompt = ref('summarize');
+const aiPanelOpen = ref(false);
 const readingMode = ref(false);
 const previewMode = ref(false);
 
@@ -210,49 +211,9 @@ const replaceAll = () => {
   toggleSearch();
 };
 
-const handleRunPrompt = async () => {
-  if (!localContent.value) return;
-  
-  isProcessingAI.value = true;
-  try {
-    // Determine the text to process: selection or whole line/content
-    let textToProcess = '';
-    const start = textareaRef.value?.selectionStart || 0;
-    const end = textareaRef.value?.selectionEnd || 0;
-    
-    if (start !== end) {
-      textToProcess = localContent.value.substring(start, end);
-    } else {
-      // Find the current line if no selection
-      const content = localContent.value;
-      const lastNewline = content.lastIndexOf('\n', start - 1);
-      const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
-      const nextNewline = content.indexOf('\n', start);
-      const lineEnd = nextNewline === -1 ? content.length : nextNewline;
-      textToProcess = content.substring(lineStart, lineEnd);
-    }
-
-    const { result } = await aiApi.process(selectedPrompt.value, textToProcess);
-    
-    // Replace the text
-    if (start !== end) {
-      localContent.value = localContent.value.slice(0, start) + result + localContent.value.slice(end);
-    } else {
-      // If it was a line, replace the line
-      const content = localContent.value;
-      const lastNewline = content.lastIndexOf('\n', start - 1);
-      const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
-      const nextNewline = content.indexOf('\n', start);
-      const lineEnd = nextNewline === -1 ? content.length : nextNewline;
-      localContent.value = content.slice(0, lineStart) + result + content.slice(lineEnd);
-    }
-  } catch (e: any) {
-    console.error('AI processing failed', e);
-    alert('AI processing failed. Please try again.');
-  } finally {
-    isProcessingAI.value = false;
-    textareaRef.value?.focus();
-  }
+const handleAIApply = (content: string) => {
+  localContent.value = content;
+  textareaRef.value?.focus();
 };
 
 const handleEscape = () => {
@@ -401,6 +362,14 @@ watch(localContent, (newContent) => {
       @select="updateSelection"
     ></textarea>
     
+    <AIPanel 
+      :open="aiPanelOpen" 
+      :selected-text="localContent.substring(selectionStart, selectionEnd)"
+      :full-content="localContent"
+      @close="aiPanelOpen = false"
+      @apply="handleAIApply"
+    />
+
     <Teleport v-if="!readingMode && !previewMode" to="#top-bar-actions">
       <div class="editor-top-actions">
         <!-- Preview Mode -->
@@ -479,48 +448,16 @@ watch(localContent, (newContent) => {
 
         <div class="top-divider"></div>
 
-        <!-- AI Prompts -->
-        <mdui-dropdown @pointerdown.prevent @mousedown.prevent>
-          <mdui-button-icon 
-            slot="trigger" 
-            tooltip="AI Prompts" 
-            style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-            tabindex="-1"
-            @pointerdown.prevent 
-            @mousedown.prevent
-          >
-            <mdui-icon-smart-toy></mdui-icon-smart-toy>
-          </mdui-button-icon>
-          <mdui-menu @change="(e: any) => selectedPrompt = e.target.value" @pointerdown.prevent @mousedown.prevent tabindex="-1">
-            <mdui-menu-item 
-              v-for="p in [
-                { id: 'summarize', name: 'Summarize' },
-                { id: 'fix_grammar', name: 'Fix Grammar' },
-                { id: 'professional', name: 'Professional' },
-                { id: 'creative', name: 'Creative' }
-              ]" 
-              :key="p.id" 
-              :value="p.id" 
-              style="color: #CDDC39; --mdui-menu-item-height: 40px; font-size: 14px;"
-              tabindex="-1"
-              @pointerdown.prevent
-              @mousedown.prevent
-            >
-              {{ p.name }}
-            </mdui-menu-item>
-          </mdui-menu>
-        </mdui-dropdown>
-
+        <!-- AI Assistant Toggle -->
         <mdui-button-icon 
-          :loading="isProcessingAI"
-          @click="handleRunPrompt"
-          @pointerdown.prevent
+          @click="aiPanelOpen = !aiPanelOpen"
+          @pointerdown.prevent 
           @mousedown.prevent
           tabindex="-1"
-          tooltip="Run AI Prompt"
-          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
+          tooltip="AI Assistant"
+          :style="{ color: aiPanelOpen ? '#CDDC39' : 'inherit', '--mdui-button-icon-size': '40px' }"
         >
-          <mdui-icon-play-arrow></mdui-icon-play-arrow>
+          <mdui-icon-auto-awesome></mdui-icon-auto-awesome>
         </mdui-button-icon>
 
         <div class="top-divider"></div>

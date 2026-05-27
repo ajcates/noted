@@ -18,6 +18,19 @@ export const DEFAULT_CONFIG: Partial<AppConfig> = {
 };
 
 export async function loadConfig(cliOptions: any, rootDir: string): Promise<AppConfig> {
+  // 1. Load standard .env from current or parent directories
+  const envPath = path.resolve(process.cwd(), '.env');
+  const parentEnvPath = path.resolve(process.cwd(), '..', '.env');
+  
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+  } else if (fs.existsSync(parentEnvPath)) {
+    dotenv.config({ path: parentEnvPath });
+  } else {
+    dotenv.config(); // Default search
+  }
+
+  // 2. Load specified config.env (usually for CLI options)
   const configPath = path.resolve(process.cwd(), cliOptions.config || 'config.env');
   
   let envConfig = {};

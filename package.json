@@ -13,7 +13,7 @@
     "build:server": "npm run build --workspace=server",
     "build": "npm run increment-build && npm run build:server && npm run build:frontend",
     "install-global": "npm install && npm run build && cd server && npm install -g .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test --workspaces"
   },
   "repository": {
     "type": "git",

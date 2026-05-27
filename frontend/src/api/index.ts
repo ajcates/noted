@@ -68,9 +68,18 @@ export const authApi = {
   },
 };
 
+export interface AIResponse {
+  comment: string;
+  content: string | null;
+  questions?: {
+    question: string;
+    options: string[];
+  }[];
+}
+
 export const aiApi = {
-  process(promptId: string, text: string): Promise<{ result: string }> {
-    return api.post('/ai/process', { promptId, text }).then((res) => res.data);
+  process(promptId: string, fullContent: string, selection?: string, history: any[] = []): Promise<AIResponse> {
+    return api.post('/ai/process', { promptId, fullContent, selection, history }).then((res) => res.data);
   },
 };
 

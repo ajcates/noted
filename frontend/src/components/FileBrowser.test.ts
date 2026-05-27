@@ -1,0 +1,90 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mount } from '@vue/test-utils';
+import FileBrowser from './FileBrowser.vue';
+import { createPinia, setActivePinia } from 'pinia';
+import { useFileStore } from '@/stores/fileStore';
+
+// Mock the API and DB to prevent real network/DB calls
+vi.mock('@/api', () => ({
+  filesApi: {
+    list: vi.fn(() => Promise.resolve([])),
+    read: vi.fn(),
+    status: vi.fn(() => Promise.resolve({ config: { readonly: false, authEnabled: false } })),
+  },
+}));
+
+vi.mock('@/utils/db', () => ({
+  db: {
+    files: { 
+      toArray: vi.fn(() => Promise.resolve([])),
+      put: vi.fn(() => Promise.resolve()),
+    },
+    pendingChanges: { toArray: vi.fn(() => Promise.resolve([])) }
+  }
+}));
+
+describe('FileBrowser.vue', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    
+    // Mock localStorage
+    const storage: Record<string, string> = {};
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key) => storage[key] || null),
+      setItem: vi.fn((key, value) => { storage[key] = value; }),
+      removeItem: vi.fn((key) => { delete storage[key]; }),
+    });
+
+    // Default navigator.onLine mock
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: true,
+    });
+  });
+
+  it('renders files from the store', async () => {
+    const mockFiles = [
+      { name: 'test.md', path: 'test.md', type: 'file' as const, size: 1024, mtime: new Date().toISOString() }
+    ];
+    const { filesApi } = await import('@/api');
+    (filesApi.list as any).mockResolvedValue(mockFiles);
+
+    const wrapper = mount(FileBrowser);
+    
+    // Wait for fetchFiles to complete
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.text()).toContain('test.md');
+    expect(wrapper.text()).toContain('1.00 KB');
+  });
+
+  it('calls openFile when a file is clicked', async () => {
+    const store = useFileStore();
+    store.files = [
+      { name: 'test.md', path: 'test.md', type: 'file', size: 1024, mtime: new Date().toISOString() }
+    ] as any;
+    
+    const openFileSpy = vi.spyOn(store, 'openFile').mockImplementation(() => Promise.resolve());
+    
+    const wrapper = mount(FileBrowser);
+    const fileItem = wrapper.find('mdui-list-item');
+    await fileItem.trigger('click');
+    
+    expect(openFileSpy).toHaveBeenCalled();
+  });
+
+  it('shows empty state when no files', () => {
+    const wrapper = mount(FileBrowser);
+    expect(wrapper.text()).toContain('No files found');
+  });
+
+  it('renders loading progress when store is loading', () => {
+    const store = useFileStore();
+    store.loading = true;
+    
+    const wrapper = mount(FileBrowser);
+    expect(wrapper.find('mdui-linear-progress').exists()).toBe(true);
+  });
+});
