@@ -104,6 +104,8 @@ const openSearchResult = (path: string) => {
   searchQuery.value = '';
   fileStore.searchResults = [];
 };
+
+const isFabOpen = ref(false);
 </script>
 
 <template>
@@ -198,12 +200,17 @@ const openSearchResult = (path: string) => {
 
     <!-- FAB for Creation -->
     <div v-if="!fileStore.readonly" class="fab-container">
-      <mdui-dropdown placement="top-end">
-        <mdui-fab slot="trigger" icon="add" extended style="background-color: #CDDC39; color: black;">
-          <mdui-icon-add slot="icon"></mdui-icon-add>
-          Create
+      <mdui-dropdown placement="top-end" @open="isFabOpen = true" @close="isFabOpen = false">
+        <mdui-fab 
+          slot="trigger" 
+          :extended="!isFabOpen" 
+          style="background-color: #CDDC39; color: black; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);"
+        >
+          <mdui-icon-add v-if="!isFabOpen" slot="icon" class="fab-icon"></mdui-icon-add>
+          <mdui-icon-close v-else slot="icon" class="fab-icon rotate-45"></mdui-icon-close>
+          <span v-if="!isFabOpen">Create</span>
         </mdui-fab>
-        <mdui-menu>
+        <mdui-menu class="fab-menu">
           <mdui-menu-item @click="openCreateDialog('file')">
             <mdui-icon-note-add slot="icon"></mdui-icon-note-add>
             New File
@@ -309,6 +316,23 @@ const openSearchResult = (path: string) => {
   bottom: 16px;
   right: 16px;
   z-index: 100;
+}
+.fab-icon {
+  transition: transform 0.3s ease;
+}
+.rotate-45 {
+  transform: rotate(0deg); /* It's already an 'x', but we can animate it */
+  animation: rotate-in 0.3s ease;
+}
+@keyframes rotate-in {
+  from { transform: rotate(-90deg); opacity: 0; }
+  to { transform: rotate(0deg); opacity: 1; }
+}
+.fab-menu {
+  margin-bottom: 8px;
+  background-color: rgb(var(--mdui-color-surface-container-high));
+  border-radius: 12px;
+  box-shadow: var(--mdui-elevation-level3);
 }
 .delete-item {
   color: rgb(var(--mdui-color-error));

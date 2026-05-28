@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs-extra';
+import { fileURLToPath } from 'url';
 
 export interface AppConfig {
   rootPath: string;
@@ -9,6 +10,7 @@ export interface AppConfig {
   readonly: boolean;
   incrementPort: boolean;
   password?: string;
+  geminiApiKey?: string;
 }
 
 export const DEFAULT_CONFIG: Partial<AppConfig> = {
@@ -18,19 +20,21 @@ export const DEFAULT_CONFIG: Partial<AppConfig> = {
 };
 
 export async function loadConfig(cliOptions: any, rootDir: string): Promise<AppConfig> {
-  // 1. Load standard .env from current or parent directories
-  const envPath = path.resolve(process.cwd(), '.env');
-  const parentEnvPath = path.resolve(process.cwd(), '..', '.env');
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
   
-  if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath });
-  } else if (fs.existsSync(parentEnvPath)) {
-    dotenv.config({ path: parentEnvPath });
+  // 1. Load project-root .env (relative to this script's location)
+  // server/src/config.ts or server/dist/config.js -> ../../ is the workspace root
+  const projectRoot = path.resolve(__dirname, '../../');
+  const projectEnvPath = path.join(projectRoot, '.env');
+  
+  if (fs.existsSync(projectEnvPath)) {
+    dotenv.config({ path: projectEnvPath });
   } else {
-    dotenv.config(); // Default search
+    // Fallback to default search if project .env is missing
+    dotenv.config();
   }
 
-  // 2. Load specified config.env (usually for CLI options)
+  // 2. Load specified config.env from CWD if provided via CLI
   const configPath = path.resolve(process.cwd(), cliOptions.config || 'config.env');
   
   let envConfig = {};
@@ -57,6 +61,7 @@ export async function loadConfig(cliOptions: any, rootDir: string): Promise<AppC
     readonly: !!readonly,
     incrementPort: !!incrementPort,
     password: process.env.PASSWORD,
+    geminiApiKey: process.env.GEMINI_API_KEY,
   };
 
   return config;

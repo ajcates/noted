@@ -4,8 +4,14 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export function createAiRouter(config: AppConfig) {
   const router = new Router({ prefix: '/api/ai' });
-  const apiKey = process.env.GEMINI_API_KEY || '';
-  console.log('AI Router initialized. API Key present:', !!apiKey, 'Length:', apiKey.length);
+  const apiKey = config.geminiApiKey || '';
+  
+  if (!apiKey) {
+    console.warn('WARNING: Gemini API Key is missing. AI features will fail with 403 Forbidden.');
+  } else {
+    console.log('Gemini API Key loaded (starts with:', apiKey.substring(0, 4) + '...)');
+  }
+
   const genAI = new GoogleGenerativeAI(apiKey);
 
   const systemPrompt = `You are an AI assistant for a note-taking application called 'noted'.
@@ -119,10 +125,16 @@ Guidelines:
           questions: [] 
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error calling Gemini API:', error);
-      ctx.status = 500;
-      ctx.body = { error: 'Failed to process AI request' };
+      ctx.status = error.status || 500;
+      ctx.body = { 
+        error: 'Failed to process AI request',
+        details: error.message,
+        suggestion: error.message?.includes('unregistered callers') 
+          ? 'Check if GEMINI_API_KEY is valid and correctly loaded in the server environment.' 
+          : undefined
+      };
     }
   });
 
