@@ -38,6 +38,12 @@ export interface FileMetadata {
   mtime: string;
 }
 
+export interface SearchResult {
+  path: string;
+  name: string;
+  snippet: string;
+}
+
 export const filesApi = {
   list(path: string = '.'): Promise<FileMetadata[]> {
     return api.get('/files/list', { params: { path } }).then((res) => res.data);
@@ -56,6 +62,9 @@ export const filesApi = {
   },
   delete(path: string): Promise<any> {
     return api.delete('/files/delete', { data: { path } }).then((res) => res.data);
+  },
+  search(query: string): Promise<SearchResult[]> {
+    return api.get('/files/search', { params: { q: query } }).then((res) => res.data);
   },
   status(): Promise<any> {
     return api.get('/status').then((res) => res.data);
@@ -78,8 +87,8 @@ export interface AIResponse {
 }
 
 export const aiApi = {
-  process(promptId: string, fullContent: string, selection?: string, history: any[] = []): Promise<AIResponse> {
-    return api.post('/ai/process', { promptId, fullContent, selection, history }).then((res) => res.data);
+  process(promptId: string, fullContent: string, selection?: string, history: any[] = [], fileList: string[] = [], customInstructions?: string): Promise<AIResponse> {
+    return api.post('/ai/process', { promptId, fullContent, selection, history, fileList, customInstructions }).then((res) => res.data);
   },
 };
 

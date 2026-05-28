@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { io } from 'socket.io-client';
-import { filesApi, FileMetadata } from '@/api';
+import { filesApi, FileMetadata, SearchResult } from '@/api';
 import { db } from '@/utils/db';
 
 type SortBy = 'name' | 'mtime' | 'size';
@@ -21,6 +21,8 @@ export const useFileStore = defineStore('file', {
     error: null as string | null,
     isOnline: navigator.onLine,
     conflict: null as { serverContent: string, localContent: string } | null,
+    searchResults: [] as SearchResult[],
+    isSearching: false,
   }),
   getters: {
     sortedFiles(state) {
@@ -55,6 +57,9 @@ export const useFileStore = defineStore('file', {
         console.error('Error in sortedFiles getter:', err);
         return state.files;
       }
+    },
+    fileList(state): string[] {
+      return state.files.map(f => f.name);
     }
   },
   actions: {
@@ -183,6 +188,7 @@ export const useFileStore = defineStore('file', {
         this.currentContent = content;
         this.isEditing = true;
         this.addToRecent(file);
+        this.syncUrl();
       } catch (err: any) {
         this.error = err.message || 'Failed to read file';
       } finally {
@@ -198,6 +204,9 @@ export const useFileStore = defineStore('file', {
         // Optimistic update local cache
         await db.files.where('path').equals(path).modify({ content });
         this.currentContent = content;
+
+        // Save a version snapshot
+        await this.saveVersion(path, content);
 
         if (this.isOnline) {
           await filesApi.write(path, content);
@@ -285,6 +294,20 @@ export const useFileStore = defineStore('file', {
         await this.fetchFiles(this.currentPath);
       }
     },
+    async searchFiles(query: string) {
+      if (!query.trim()) {
+        this.searchResults = [];
+        return;
+      }
+      this.isSearching = true;
+      try {
+        this.searchResults = await filesApi.search(query);
+      } catch (err: any) {
+        this.error = err.message || 'Search failed';
+      } finally {
+        this.isSearching = false;
+      }
+    },
     async syncPendingChanges() {
       const changes = await db.pendingChanges.toArray();
       if (changes.length === 0) return;
@@ -352,14 +375,85 @@ export const useFileStore = defineStore('file', {
       this.conflict = null;
       await this.saveFile(resolvedContent);
     },
+    async saveVersion(path: string, content: string) {
+      // Avoid saving identical consecutive versions
+      const lastVersion = await db.versions.where('path').equals(path).sortBy('timestamp').then(v => v[v.length - 1]);
+      if (lastVersion && lastVersion.content === content) return;
+
+      await db.versions.add({
+        path,
+        content,
+        timestamp: Date.now()
+      });
+
+      // Cleanup old versions (keep last 50)
+      const count = await db.versions.where('path').equals(path).count();
+      if (count > 50) {
+        const oldest = await db.versions.where('path').equals(path).limit(count - 50).toArray();
+        await db.versions.bulkDelete(oldest.map(v => v.id!));
+      }
+    },
+    async getVersions(path: string) {
+      return db.versions.where('path').equals(path).reverse().sortBy('timestamp');
+    },
     closeEditor() {
       this.isEditing = false;
       this.currentFile = null;
       this.currentContent = '';
+      this.syncUrl();
     },
     async navigate(path: string) {
       this.isEditing = false;
       await this.fetchFiles(path);
+      this.syncUrl();
+    },
+    syncUrl() {
+      let path = '/';
+      if (this.isEditing && this.currentFile) {
+        path = '/' + this.currentFile.path;
+      } else if (this.currentPath !== '.') {
+        path = '/' + this.currentPath + '/';
+      }
+      
+      if (window.location.pathname !== path) {
+        window.history.pushState(null, '', path);
+      }
+    },
+    async handleUrl() {
+      const path = window.location.pathname.substring(1); // Remove leading slash
+      if (!path || path === '') {
+        await this.fetchFiles('.');
+        return;
+      }
+
+      if (path.endsWith('.md')) {
+        // It's a file
+        const segments = path.split('/');
+        const name = segments[segments.length - 1];
+        const dir = segments.slice(0, -1).join('/') || '.';
+        
+        // Ensure we have the file list for the parent directory
+        await this.fetchFiles(dir);
+        
+        // Try to find the file in the list
+        const file = this.files.find(f => f.path === path);
+        if (file) {
+          await this.openFile(file);
+        } else {
+          // If not found (maybe first load), create a dummy metadata and try to open
+          await this.openFile({
+            name,
+            path,
+            type: 'file',
+            size: 0,
+            mtime: new Date().toISOString()
+          });
+        }
+      } else {
+        // It's a directory
+        const dirPath = path.endsWith('/') ? path.slice(0, -1) : path;
+        await this.fetchFiles(dirPath);
+      }
     },
     addToRecent(file: FileMetadata) {
       const exists = this.recentFiles.find((f: FileMetadata) => f.path === file.path);

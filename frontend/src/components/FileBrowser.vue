@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFileStore } from '@/stores/fileStore';
+import debounce from 'lodash/debounce';
 
 import '@mdui/icons/folder.js';
 import '@mdui/icons/insert-drive-file.js';
@@ -33,10 +34,6 @@ const createName = ref('');
 const renameDialogOpen = ref(false);
 const renameOldPath = ref('');
 const renameNewName = ref('');
-
-onMounted(() => {
-  fileStore.fetchFiles(fileStore.currentPath);
-});
 
 const handleEntryClick = (entry: any) => {
   if (entry.type === 'directory') {
@@ -95,13 +92,60 @@ const undoDelete = () => {
   fileStore.cancelDelete();
   deleteSnackbarOpen.value = false;
 };
+
+const searchQuery = ref('');
+
+const onSearchInput = debounce((query: string) => {
+  fileStore.searchFiles(query);
+}, 300);
+
+const openSearchResult = (path: string) => {
+  fileStore.openFile({ path, name: path.split('/').pop() || '', type: 'file', size: 0, mtime: '' });
+  searchQuery.value = '';
+  fileStore.searchResults = [];
+};
 </script>
 
 <template>
   <div class="file-browser">
-    <mdui-linear-progress v-if="fileStore.loading"></mdui-linear-progress>
+    <mdui-linear-progress v-if="fileStore.loading || fileStore.isSearching"></mdui-linear-progress>
     
-    <div class="list-surface">
+    <!-- Global Search -->
+    <div class="search-section">
+      <mdui-text-field
+        v-model="searchQuery"
+        placeholder="Search all notes..."
+        variant="outlined"
+        class="search-input"
+        @input="(e: any) => onSearchInput(e.target.value)"
+      >
+        <mdui-icon-search slot="icon"></mdui-icon-search>
+        <mdui-button-icon v-if="searchQuery" slot="end-icon" @click="searchQuery = ''; fileStore.searchResults = []">
+          <mdui-icon-close></mdui-icon-close>
+        </mdui-button-icon>
+      </mdui-text-field>
+    </div>
+    
+    <!-- Search Results -->
+    <div v-if="searchQuery" class="list-surface results-surface">
+      <mdui-list v-if="fileStore.searchResults.length > 0">
+        <mdui-list-item 
+          v-for="result in fileStore.searchResults" 
+          :key="result.path"
+          @click="openSearchResult(result.path)"
+          ripple
+        >
+          <mdui-icon-insert-drive-file slot="icon"></mdui-icon-insert-drive-file>
+          {{ result.name }}
+          <div slot="description" class="search-snippet">{{ result.snippet }}</div>
+        </mdui-list-item>
+      </mdui-list>
+      <div v-else-if="!fileStore.isSearching" class="empty-state">
+        No matches found for "{{ searchQuery }}"
+      </div>
+    </div>
+
+    <div v-else class="list-surface">
       <mdui-list style="background-color: transparent;">
         <mdui-list-item 
           v-if="fileStore.currentPath !== '.'" 
@@ -225,6 +269,24 @@ const undoDelete = () => {
   position: relative;
   min-height: calc(100dvh - 56px);
   background-color: rgb(var(--mdui-color-surface));
+}
+.search-section {
+  margin-bottom: 16px;
+}
+.search-input {
+  width: 100%;
+}
+.search-snippet {
+  font-size: 12px;
+  opacity: 0.7;
+  font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+.results-surface {
+  margin-top: 8px;
 }
 .list-surface {
   background-color: rgb(var(--mdui-color-surface-container-highest));

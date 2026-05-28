@@ -67,24 +67,23 @@ describe('Editor.vue', () => {
     expect(saveFileSpy).toHaveBeenCalledWith('New content');
   });
 
-  it('calls AI API when run prompt is clicked', async () => {
-    vi.useRealTimers();
-    const { aiApi } = await import('@/api');
-    (aiApi.process as any).mockResolvedValue({ result: 'AI Result' });
-
+  it('toggles AI Assistant panel when button is clicked', async () => {
     const store = useFileStore();
     store.currentContent = 'Some text';
     store.currentFile = { name: 'test.md', path: 'test.md' } as any;
 
     const wrapper = mount(Editor);
     
-    // Find the AI run button (it's in the Teleport, so we need to find it in document.body or mock Teleport)
-    // Actually, Vue Test Utils can handle Teleport if we don't mock it and the target exists.
-    const aiBtn = document.body.querySelector('mdui-button-icon[tooltip="Run AI Prompt"]');
+    // Check if panel is closed initially
+    expect(wrapper.findComponent({ name: 'AIPanel' }).props('open')).toBe(false);
+
+    // Find the AI assistant button
+    const aiBtn = document.body.querySelector('mdui-button-icon[tooltip="AI Assistant"]');
     (aiBtn as any)?.click();
 
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
     
-    expect(aiApi.process).toHaveBeenCalled();
+    // Check if panel is open
+    expect(wrapper.findComponent({ name: 'AIPanel' }).props('open')).toBe(true);
   });
 });

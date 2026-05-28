@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
-import { aiApi } from '@/api';
+import { ref, onMounted, nextTick, watch } from 'vue';
+import { useAI } from '@/composables/useAI';
 import '@mdui/icons/close.js';
 import '@mdui/icons/send.js';
 import '@mdui/icons/auto-awesome.js';
@@ -15,16 +15,8 @@ const props = defineProps<{
 
 const emit = defineEmits(['close', 'apply']);
 
-interface ChatMessage {
-  role: 'user' | 'model';
-  content: string;
-  updatedContent?: string | null;
-  questions?: { question: string, options: string[] }[];
-}
-
-const chatLog = ref<ChatMessage[]>([]);
+const { chatLog, isProcessing, handleAIAction } = useAI(props);
 const userInput = ref('');
-const isProcessing = ref(false);
 const chatContainer = ref<HTMLElement | null>(null);
 
 const prompts = [
@@ -45,51 +37,27 @@ const scrollToBottom = async () => {
   }
 };
 
-const handleAIAction = async (promptId: string, customText?: string) => {
-  const selection = props.selectedText;
-  const fullContent = props.fullContent;
-  
-  const displayMessage = customText ? customText : `Apply ${promptId} to ${selection ? 'selection' : 'full content'}`;
-  
-  chatLog.value.push({ role: 'user', content: displayMessage });
-  isProcessing.value = true;
+// Auto-scroll when new messages arrive
+watch(chatLog, () => {
+  scrollToBottom();
+}, { deep: true });
+
+const handleAIActionWrapped = async (promptId: string, customText?: string) => {
   userInput.value = '';
-  await scrollToBottom();
-
-  try {
-    const history = chatLog.value.map(msg => ({
-      role: msg.role,
-      parts: [{ text: msg.content }]
-    }));
-
-    const response = await aiApi.process(promptId, fullContent, customText || selection, history);
-    
-    chatLog.value.push({ 
-      role: 'model', 
-      content: response.comment,
-      updatedContent: response.content,
-      questions: response.questions
-    });
-  } catch (error) {
-    console.error('AI error:', error);
-    chatLog.value.push({ role: 'model', content: 'Sorry, I encountered an error processing your request.' });
-  } finally {
-    isProcessing.value = false;
-    await scrollToBottom();
-  }
+  await handleAIAction(promptId, customText);
 };
 
 const handleQuestionClick = (option: string) => {
-  handleAIAction('chat', option);
+  handleAIActionWrapped('chat', option);
 };
 
 const handleChatSubmit = () => {
   if (!userInput.value.trim() || isProcessing.value) return;
-  handleAIAction('chat', userInput.value.trim());
+  handleAIActionWrapped('chat', userInput.value.trim());
 };
 
-const applyResult = (content: string) => {
-  emit('apply', content);
+const applyResult = (content: string, promptId?: string) => {
+  emit('apply', { content, promptId });
 };
 
 const copyToClipboard = (text: string) => {
@@ -137,7 +105,7 @@ const copyToClipboard = (text: string) => {
         <!-- Updated Content Preview/Apply -->
         <div v-if="msg.updatedContent" class="updated-content-alert">
           <div class="alert-text">AI suggested changes to the note.</div>
-          <mdui-button variant="filled" size="small" @click="applyResult(msg.updatedContent)">
+          <mdui-button variant="filled" size="small" @click="applyResult(msg.updatedContent, msg.promptId)">
             Apply Changes
           </mdui-button>
         </div>

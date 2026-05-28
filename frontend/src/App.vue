@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import FileBrowser from '@/components/FileBrowser.vue';
 import Editor from '@/components/Editor.vue';
@@ -21,6 +22,7 @@ import '@mdui/icons/arrow-downward.js';
 
 const fileStore = useFileStore();
 const authStore = useAuthStore();
+const settingsStore = useSettingsStore();
 const drawerOpen = ref(false);
 
 const handleSort = (by: 'name' | 'mtime' | 'size') => {
@@ -37,14 +39,26 @@ const showLogin = computed(() => {
 
 onMounted(async () => {
   fileStore.init();
+  settingsStore.applyTheme();
   await fileStore.fetchStatus();
   if (!showLogin.value) {
-    fileStore.fetchFiles();
+    await fileStore.handleUrl();
   }
+
+  window.addEventListener('popstate', () => {
+    fileStore.handleUrl();
+  });
 
   window.addEventListener('auth-error', () => {
     authStore.logout();
   });
+});
+
+// Re-handle URL when authenticated
+watch(() => authStore.isAuthenticated, async (isAuth) => {
+  if (isAuth) {
+    await fileStore.handleUrl();
+  }
 });
 
 // Watch isEditing to determine slide direction
@@ -80,10 +94,20 @@ const buildNumber = __BUILD_NUMBER__;
   
   <mdui-layout v-else>
     <mdui-top-app-bar style="height: 56px;">
-      <mdui-button-icon v-if="!fileStore.isEditing" @click="toggleDrawer" style="--mdui-button-icon-size: 40px;">
+      <mdui-button-icon 
+        v-if="!fileStore.isEditing" 
+        @click="toggleDrawer" 
+        style="--mdui-button-icon-size: 40px;"
+        aria-label="Open menu"
+      >
         <mdui-icon-menu></mdui-icon-menu>
       </mdui-button-icon>
-      <mdui-button-icon v-else @click="closeEditor" style="--mdui-button-icon-size: 40px;">
+      <mdui-button-icon 
+        v-else 
+        @click="closeEditor" 
+        style="--mdui-button-icon-size: 40px;"
+        aria-label="Back to file list"
+      >
         <mdui-icon-arrow-back></mdui-icon-arrow-back>
       </mdui-button-icon>
       
@@ -153,6 +177,31 @@ const buildNumber = __BUILD_NUMBER__;
           <mdui-icon-logout slot="icon"></mdui-icon-logout>
           Logout
         </mdui-list-item>
+
+        <mdui-divider></mdui-divider>
+        <mdui-list-subheader>AI Settings</mdui-list-subheader>
+        <div style="padding: 0 16px 16px 16px;">
+          <mdui-text-field
+            label="Custom AI Instructions"
+            rows="3"
+            area
+            :value="settingsStore.aiInstructions"
+            @input="(e: any) => settingsStore.setAiInstructions(e.target.value)"
+            helper="e.g. 'Use British English', 'Be concise'"
+          ></mdui-text-field>
+        </div>
+
+        <mdui-divider></mdui-divider>
+        <mdui-list-subheader>Theme</mdui-list-subheader>
+        <mdui-segmented-button-group 
+          :value="settingsStore.theme" 
+          @change="(e: any) => settingsStore.setTheme(e.target.value)"
+          style="margin: 0 16px 16px 16px;"
+        >
+          <mdui-segmented-button value="light">Light</mdui-segmented-button>
+          <mdui-segmented-button value="dark">Dark</mdui-segmented-button>
+          <mdui-segmented-button value="auto">Auto</mdui-segmented-button>
+        </mdui-segmented-button-group>
 
         <div class="build-number">Build: {{ buildNumber }}</div>
       </mdui-list>

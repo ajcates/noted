@@ -9,6 +9,7 @@ vi.mock('@/api', () => ({
   filesApi: {
     list: vi.fn(() => Promise.resolve([])),
     read: vi.fn(),
+    search: vi.fn(() => Promise.resolve([])),
     status: vi.fn(() => Promise.resolve({ config: { readonly: false, authEnabled: false } })),
   },
 }));
@@ -80,11 +81,26 @@ describe('FileBrowser.vue', () => {
     expect(wrapper.text()).toContain('No files found');
   });
 
-  it('renders loading progress when store is loading', () => {
-    const store = useFileStore();
-    store.loading = true;
-    
+  it('performs global search and displays results', async () => {
+    const { filesApi } = await import('@/api');
+    const mockResults = [
+      { path: 'search-result.md', name: 'search-result.md', snippet: 'Matched snippet' }
+    ];
+    (filesApi.search as any).mockResolvedValue(mockResults);
+
     const wrapper = mount(FileBrowser);
-    expect(wrapper.find('mdui-linear-progress').exists()).toBe(true);
+    const searchInput = wrapper.find('mdui-text-field');
+    
+    (searchInput.element as any).value = 'query';
+    searchInput.element.dispatchEvent(new Event('input'));
+
+    // Wait for debounce (300ms + buffer)
+    await new Promise(resolve => setTimeout(resolve, 400));
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(filesApi.search).toHaveBeenCalledWith('query');
+    expect(wrapper.text()).toContain('search-result.md');
+    expect(wrapper.text()).toContain('Matched snippet');
   });
 });

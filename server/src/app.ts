@@ -5,6 +5,7 @@ import serve from 'koa-static';
 import cors from '@koa/cors';
 import { koaBody, HttpMethodEnum } from 'koa-body';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -116,6 +117,23 @@ export function createApp(config: AppConfig) {
     ? './public' 
     : '../../frontend/dist');
   app.use(serve(staticPath));
+
+  // SPA Fallback: serve index.html for non-API routes
+  app.use(async (ctx, next) => {
+    if (ctx.path.startsWith('/api')) {
+      await next();
+      return;
+    }
+    
+    // If we're here, it's either a SPA route or a missing static file
+    const indexPath = path.join(staticPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      ctx.type = 'html';
+      ctx.body = fs.createReadStream(indexPath);
+    } else {
+      await next();
+    }
+  });
 
   return { app, httpServer, io };
 }

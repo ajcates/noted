@@ -1,7 +1,7 @@
 import Router from '@koa/router';
 import fs from 'fs-extra';
 import { AppConfig } from '../config.js';
-import { resolveSafePath, getMetadata, IGNORE_LIST } from '../utils/fs.js';
+import { resolveSafePath, getMetadata, IGNORE_LIST, searchFiles } from '../utils/fs.js';
 
 export function createFilesRouter(config: AppConfig) {
   const router = new Router({ prefix: '/api/files' });
@@ -113,6 +113,20 @@ export function createFilesRouter(config: AppConfig) {
     const targetPath = resolveSafePath(config.rootPath, relativePath);
     await fs.remove(targetPath);
     ctx.body = { success: true };
+  });
+
+  /**
+   * Search for text in files.
+   * Query: ?q=query
+   */
+  router.get('/search', async (ctx) => {
+    const query = ctx.query.q as string;
+    if (!query) {
+      ctx.throw(400, 'Query is required');
+    }
+
+    const results = await searchFiles(config.rootPath, query);
+    ctx.body = results;
   });
 
   return router;

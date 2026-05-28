@@ -14,6 +14,7 @@
   - `idea.md`: The original project proposal and intended development workflow.
   - `mdui.md`: Documentation and reference for MDUI v2.
   - `vuejs.md`: Documentation and reference for Vue.js 3.
+  - `improve.md`: List of future improvements and technical debt.
 - `README.md`: Minimal project description.
 - `LICENSE`: Project license information.
 

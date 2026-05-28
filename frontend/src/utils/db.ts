@@ -19,15 +19,24 @@ export interface PendingChange {
   timestamp: number;
 }
 
+export interface FileVersion {
+  id?: number;
+  path: string;
+  content: string;
+  timestamp: number;
+}
+
 export class NotedDatabase extends Dexie {
   files!: Table<CachedFile>;
   pendingChanges!: Table<PendingChange>;
+  versions!: Table<FileVersion>;
 
   constructor() {
     super('NotedDatabase');
-    this.version(1).stores({
-      files: 'path', // Primary key is path
-      pendingChanges: '++id, path, type' // Primary key is auto-increment id
+    this.version(2).stores({
+      files: 'path',
+      pendingChanges: '++id, path, type',
+      versions: '++id, path, timestamp'
     });
   }
 }

@@ -14,7 +14,6 @@ import '@mdui/icons/find-replace.js';
 import '@mdui/icons/keyboard-arrow-up.js';
 import '@mdui/icons/keyboard-arrow-down.js';
 import '@mdui/icons/visibility.js';
-import '@mdui/icons/description.js';
 import '@mdui/icons/text-fields.js';
 import '@mdui/icons/format-color-reset.js';
 import '@mdui/icons/border-color.js';
@@ -29,12 +28,27 @@ import '@mdui/icons/play-arrow.js';
 import '@mdui/icons/edit.js';
 
 const fileStore = useFileStore();
-const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const historyOpen = ref(false);
+const versions = ref<any[]>([]);
+
+const openHistory = async () => {
+  if (!fileStore.currentFile) return;
+  versions.value = await fileStore.getVersions(fileStore.currentFile.path);
+  historyOpen.value = true;
+};
+
+const restoreVersion = (content: string) => {
+  localContent.value = content;
+  historyOpen.value = false;
+};
+
+const formatTime = (ts: number) => {
+  return new Date(ts).toLocaleString();
+};
 
 // Local state for the textarea
 const localContent = ref(fileStore.currentContent);
 const aiPanelOpen = ref(false);
-const readingMode = ref(false);
 const previewMode = ref(false);
 
 // Search & Replace state
@@ -211,8 +225,20 @@ const replaceAll = () => {
   toggleSearch();
 };
 
-const handleAIApply = (content: string) => {
-  localContent.value = content;
+const handleAIApply = ({ content, promptId }: { content: string, promptId?: string }) => {
+  if (promptId === 'last_line') {
+    // If it was a last_line command, we remove the last line from the original content
+    // before applying the AI's version (which hopefully already removed it or processed it)
+    const lines = localContent.value.trim().split('\n');
+    if (lines.length > 0) {
+      // We check if the AI's content already looks like it replaced the whole thing
+      // The backend 'last_line' logic sends 'precedingContent' as part of the context.
+      // If we just set localContent to the new content, it should be fine.
+      localContent.value = content;
+    }
+  } else {
+    localContent.value = content;
+  }
   textareaRef.value?.focus();
 };
 
@@ -307,7 +333,7 @@ watch(localContent, (newContent) => {
 </script>
 
 <template>
-  <div class="editor-wrapper" :class="{ 'reading-mode': readingMode }">
+  <div class="editor-wrapper">
     <!-- Search Bar -->
     <div v-if="searchOpen" class="search-bar">
       <div class="search-inputs">
@@ -348,12 +374,24 @@ watch(localContent, (newContent) => {
       </div>
     </div>
 
+    <!-- History Dialog -->
+    <mdui-dialog :open="historyOpen" @overlay-click="historyOpen = false" headline="Version History">
+      <mdui-list v-if="versions.length > 0" style="max-height: 400px; overflow-y: auto;">
+        <mdui-list-item v-for="v in versions" :key="v.id" @click="restoreVersion(v.content)">
+          <div slot="description">{{ formatTime(v.timestamp) }}</div>
+          {{ v.content.substring(0, 50) }}{{ v.content.length > 50 ? '...' : '' }}
+        </mdui-list-item>
+      </mdui-list>
+      <div v-else style="padding: 16px; opacity: 0.7; text-align: center;">No versions saved yet.</div>
+      <mdui-button slot="action" variant="text" @click="historyOpen = false">Close</mdui-button>
+    </mdui-dialog>
+
     <div v-if="previewMode" class="preview-container" v-html="renderedHtml"></div>
     <textarea
       v-else
       ref="textareaRef"
       v-model="localContent"
-      :readonly="fileStore.readonly || readingMode"
+      :readonly="fileStore.readonly"
       class="native-textarea"
       placeholder="Start typing..."
       spellcheck="false"
@@ -370,7 +408,7 @@ watch(localContent, (newContent) => {
       @apply="handleAIApply"
     />
 
-    <Teleport v-if="!readingMode && !previewMode" to="#top-bar-actions">
+    <Teleport v-if="!previewMode" to="#top-bar-actions">
       <div class="editor-top-actions">
         <!-- Preview Mode -->
         <mdui-button-icon 
@@ -381,21 +419,21 @@ watch(localContent, (newContent) => {
           @pointerdown.prevent
           @mousedown.prevent
         >
-          <mdui-icon-description></mdui-icon-description>
+          <mdui-icon-visibility></mdui-icon-visibility>
         </mdui-button-icon>
 
         <div class="top-divider"></div>
 
-        <!-- Reading Mode -->
+        <!-- Version History -->
         <mdui-button-icon 
-          @click="readingMode = true"
-          tooltip="Reading Mode"
+          @click="openHistory"
+          tooltip="History"
           style="color: #CDDC39; --mdui-button-icon-size: 40px;"
           tabindex="-1"
           @pointerdown.prevent
           @mousedown.prevent
         >
-          <mdui-icon-visibility></mdui-icon-visibility>
+          <mdui-icon-history></mdui-icon-history>
         </mdui-button-icon>
 
         <div class="top-divider"></div>
@@ -476,8 +514,8 @@ watch(localContent, (newContent) => {
       </div>
     </Teleport>
 
-    <div v-if="readingMode || previewMode" class="reading-mode-fab">
-      <mdui-fab @click="readingMode = false; previewMode = false" size="small" style="background-color: #CDDC39; color: black;">
+    <div v-if="previewMode" class="reading-mode-fab">
+      <mdui-fab @click="previewMode = false" size="small" style="background-color: #CDDC39; color: black;">
         <mdui-icon-edit slot="icon"></mdui-icon-edit>
       </mdui-fab>
     </div>
@@ -514,6 +552,13 @@ watch(localContent, (newContent) => {
 .preview-container :deep(p) {
   margin-bottom: 1em;
 }
+.preview-container :deep(ul), .preview-container :deep(ol) {
+  padding-left: 24px;
+  margin-bottom: 1em;
+}
+.preview-container :deep(li) {
+  margin-bottom: 0.5em;
+}
 .preview-container :deep(code) {
   background-color: rgba(255, 255, 255, 0.1);
   padding: 2px 4px;
@@ -532,6 +577,12 @@ watch(localContent, (newContent) => {
   margin: 0;
   padding-left: 16px;
   opacity: 0.8;
+  font-style: italic;
+}
+.preview-container :deep(hr) {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 2em 0;
 }
 .preview-container :deep(mark) {
   background-color: #CDDC39;
@@ -541,6 +592,19 @@ watch(localContent, (newContent) => {
 }
 .preview-container :deep(img) {
   max-width: 100%;
+}
+.preview-container :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 1em;
+}
+.preview-container :deep(th), .preview-container :deep(td) {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px;
+  text-align: left;
+}
+.preview-container :deep(th) {
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .editor-top-actions {
@@ -586,11 +650,6 @@ watch(localContent, (newContent) => {
   bottom: 16px;
   right: 16px;
   z-index: 100;
-}
-
-.reading-mode .native-textarea {
-  padding-bottom: 16px;
-  background-color: rgb(var(--mdui-color-background));
 }
 
 .native-textarea {
