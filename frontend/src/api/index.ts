@@ -90,6 +90,65 @@ export const aiApi = {
   process(promptId: string, fullContent: string, selection?: string, history: any[] = [], fileList: string[] = [], customInstructions?: string): Promise<AIResponse> {
     return api.post('/ai/process', { promptId, fullContent, selection, history, fileList, customInstructions }).then((res) => res.data);
   },
+  async streamProcess(
+    promptId: string, 
+    fullContent: string, 
+    selection: string | undefined, 
+    history: any[], 
+    fileList: string[], 
+    customInstructions: string | undefined,
+    onChunk: (text: string) => void
+  ): Promise<AIResponse> {
+    const token = localStorage.getItem('noted_token');
+    const response = await fetch('/api/ai/process-stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      body: JSON.stringify({ promptId, fullContent, selection, history, fileList, customInstructions }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No readable stream');
+
+    const decoder = new TextDecoder();
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.substring(6));
+            if (data.text) {
+              fullText += data.text;
+              onChunk(fullText);
+            } else if (data.error) {
+              throw new Error(data.error);
+            }
+          } catch (e) {
+            // Partial JSON or other noise
+          }
+        }
+      }
+    }
+
+    try {
+      return JSON.parse(fullText);
+    } catch (e) {
+      return { comment: fullText, content: null, questions: [] };
+    }
+  }
 };
 
 export default api;

@@ -1,6 +1,7 @@
 import Router from '@koa/router';
 import { AppConfig } from '../config.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { PassThrough } from 'stream';
 
 export function createAiRouter(config: AppConfig) {
   const router = new Router({ prefix: '/api/ai' });
@@ -37,21 +38,11 @@ Guidelines:
 - Respond ONLY with the JSON object. Do not include any other text before or after the JSON.`;
 
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-3.5-flash',
+    model: 'gemini-1.5-flash',
     systemInstruction: systemPrompt
   });
 
-  /**
-   * Process text with AI.
-   * Body: { promptId: string, fullContent: string, selection?: string, history?: { role: 'user' | 'model', parts: { text: string }[] }[] }
-   */
-  router.post('/process', async (ctx) => {
-    const { promptId, fullContent, selection, history = [], fileList = [], customInstructions = '' } = ctx.request.body as any;
-
-    if (!fullContent && history.length === 0) {
-      ctx.throw(400, 'Full content or history is required');
-    }
-
+  function preparePrompt(promptId: string, fullContent: string, selection: string, history: any[], fileList: string[], customInstructions: string) {
     const contextInfo = fileList.length > 0 
       ? `\n\nAvailable files in workspace: ${fileList.join(', ')}`
       : '';
@@ -84,7 +75,7 @@ Guidelines:
         userPrompt = `${instructionPrefix}Generate 4 distinct stylistic variations (e.g., professional, casual, concise, persuasive) for the following content. Present them ONLY as options in the "questions" field of your JSON response, with the question being "Which style do you prefer?". Set "content" to null in your response.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
         break;
       case 'last_line':
-        const lines = fullContent.trim().split('\n');
+        const lines = (fullContent || '').trim().split('\n');
         const lastLine = lines[lines.length - 1];
         const precedingContent = lines.slice(0, -1).join('\n');
         userPrompt = `${instructionPrefix}Execute the following command on the preceding content. Replace or append the result as appropriate.${contextInfo}\n\nCommand: "${lastLine}"\n\nPreceding Content:\n${precedingContent}`;
@@ -96,13 +87,67 @@ Guidelines:
         userPrompt = `${instructionPrefix}Process the following note based on user request. Focus on selection if provided.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
     }
 
-    try {
-      // Ensure history items are clean and correctly formatted
-      const cleanHistory = history.length > 0 ? history.slice(0, -1).map((h: any) => ({
-        role: h.role === 'model' ? 'model' : 'user',
-        parts: [{ text: String(h.parts?.[0]?.text || h.content || '') }]
-      })) : [];
+    const cleanHistory = history.length > 0 ? history.slice(0, -1).map((h: any) => ({
+      role: h.role === 'model' ? 'model' : 'user',
+      parts: [{ text: String(h.parts?.[0]?.text || h.content || '') }]
+    })) : [];
 
+    return { userPrompt, cleanHistory };
+  }
+
+  /**
+   * Process text with AI (Streaming).
+   */
+  router.post('/process-stream', async (ctx) => {
+    const { promptId, fullContent, selection, history = [], fileList = [], customInstructions = '' } = ctx.request.body as any;
+
+    const { userPrompt, cleanHistory } = preparePrompt(promptId, fullContent, selection, history, fileList, customInstructions);
+
+    ctx.set({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
+    const stream = new PassThrough();
+    ctx.body = stream;
+
+    try {
+      const chat = model.startChat({
+        history: cleanHistory,
+        generationConfig: {
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const result = await chat.sendMessageStream(userPrompt);
+
+      for await (const chunk of result.stream) {
+        const text = chunk.text();
+        stream.write(`data: ${JSON.stringify({ text })}\n\n`);
+      }
+      stream.end();
+    } catch (error: any) {
+      console.error('Error in AI stream:', error);
+      stream.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      stream.end();
+    }
+  });
+
+  /**
+   * Process text with AI.
+   */
+  router.post('/process', async (ctx) => {
+    const { promptId, fullContent, selection, history = [], fileList = [], customInstructions = '' } = ctx.request.body as any;
+
+    if (!fullContent && history.length === 0) {
+      ctx.throw(400, 'Full content or history is required');
+    }
+
+    const { userPrompt, cleanHistory } = preparePrompt(promptId, fullContent, selection, history, fileList, customInstructions);
+
+    try {
       const chat = model.startChat({
         history: cleanHistory,
         generationConfig: {

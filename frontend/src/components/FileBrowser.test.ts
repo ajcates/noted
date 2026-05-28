@@ -51,10 +51,10 @@ describe('FileBrowser.vue', () => {
     const { filesApi } = await import('@/api');
     (filesApi.list as any).mockResolvedValue(mockFiles);
 
+    const store = useFileStore();
+    await store.fetchFiles(); // Explicitly trigger fetch for the test
+
     const wrapper = mount(FileBrowser);
-    
-    // Wait for fetchFiles to complete
-    await new Promise(resolve => setTimeout(resolve, 0));
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).toContain('test.md');

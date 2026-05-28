@@ -15,6 +15,8 @@ const props = defineProps<{
   isHighlighted: boolean;
   canUndo: boolean;
   isProcessing: boolean;
+  wordCount: number;
+  readingTime: number;
 }>();
 
 const emit = defineEmits(['highlight', 'run-prompt', 'undo', 'format', 'select-prompt', 'header', 'list', 'link', 'escape']);
@@ -80,7 +82,13 @@ const handlePromptSelect = (id: string) => {
       </mdui-menu>
     </mdui-dropdown>
 
-    <div class="spacer"></div>
+    <div class="spacer">
+      <div class="metrics">
+        <span>{{ wordCount }} words</span>
+        <span class="metrics-divider">|</span>
+        <span>{{ readingTime }} min</span>
+      </div>
+    </div>
 
     <mdui-dropdown @pointerdown.prevent @mousedown.prevent>
       <mdui-button-icon 
@@ -132,6 +140,19 @@ const handlePromptSelect = (id: string) => {
 }
 .spacer {
   flex-grow: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.metrics {
+  font-size: 11px;
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+}
+.metrics-divider {
+  margin: 0 4px;
+  opacity: 0.5;
 }
 .run-fab {
   margin-left: 8px;

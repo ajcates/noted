@@ -3,33 +3,27 @@ import { ref, watch, onMounted, computed } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
 import debounce from 'lodash/debounce';
 import { marked } from 'marked';
+import { countWords, estimateReadingTime } from '@/utils/metrics';
 import BottomBar from './BottomBar.vue';
 import { aiApi } from '@/api';
 import AIPanel from './AIPanel.vue';
-import '@mdui/icons/auto-awesome.js';
+import { useEditor } from '@/composables/useEditor';
+import { useSearch } from '@/composables/useSearch';
 
+import '@mdui/icons/auto-awesome.js';
 import '@mdui/icons/close.js';
 import '@mdui/icons/search.js';
 import '@mdui/icons/find-replace.js';
 import '@mdui/icons/keyboard-arrow-up.js';
 import '@mdui/icons/keyboard-arrow-down.js';
 import '@mdui/icons/visibility.js';
-import '@mdui/icons/text-fields.js';
-import '@mdui/icons/format-color-reset.js';
-import '@mdui/icons/border-color.js';
-import '@mdui/icons/title.js';
-import '@mdui/icons/format-list-bulleted.js';
-import '@mdui/icons/link.js';
-import '@mdui/icons/data-object.js';
-import '@mdui/icons/undo.js';
-import '@mdui/icons/spellcheck.js';
-import '@mdui/icons/smart-toy.js';
-import '@mdui/icons/play-arrow.js';
+import '@mdui/icons/history.js';
 import '@mdui/icons/edit.js';
 
 const fileStore = useFileStore();
 const historyOpen = ref(false);
 const versions = ref<any[]>([]);
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
 const openHistory = async () => {
   if (!fileStore.currentFile) return;
@@ -51,16 +45,38 @@ const localContent = ref(fileStore.currentContent);
 const aiPanelOpen = ref(false);
 const previewMode = ref(false);
 
-// Search & Replace state
-const searchOpen = ref(false);
-const searchQuery = ref('');
-const replaceQuery = ref('');
-const searchResults = ref<number[]>([]);
-const currentResultIndex = ref(-1);
+// Composables
+const {
+  selectionStart,
+  selectionEnd,
+  isHighlighted,
+  updateSelection,
+  handleHighlight,
+  handleHeader,
+  handleList,
+  handleLink,
+  handleEscape,
+  handleFormat,
+  handleUndo
+} = useEditor(localContent, textareaRef);
 
-// Selection state for highlight detection
-const selectionStart = ref(0);
-const selectionEnd = ref(0);
+const {
+  searchOpen,
+  searchQuery,
+  replaceQuery,
+  searchResults,
+  currentResultIndex,
+  toggleSearch,
+  performSearch,
+  nextSearchResult,
+  prevSearchResult,
+  performReplace,
+  replaceAll
+} = useSearch(localContent, textareaRef);
+
+// Computed for metrics
+const wordCount = computed(() => countWords(localContent.value));
+const readingTime = computed(() => estimateReadingTime(localContent.value));
 
 const debouncedSave = debounce((content: string) => {
   fileStore.saveFile(content);
@@ -72,249 +88,9 @@ const renderedHtml = computed(() => {
   return marked.parse(content);
 });
 
-// Detect if the caret is currently inside a ==highlight== block
-const isHighlighted = computed(() => {
-  const content = localContent.value;
-  const pos = selectionStart.value;
-  
-  // Find all == ranges in the current content
-  const regex = /==(.*?)==/g;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    const start = match.index;
-    const end = match.index + match[0].length;
-    if (pos >= start && pos <= end) {
-      return true;
-    }
-  }
-  return false;
-});
-
-const updateSelection = () => {
-  if (textareaRef.value) {
-    selectionStart.value = textareaRef.value.selectionStart;
-    selectionEnd.value = textareaRef.value.selectionEnd;
-  }
-};
-
-// --- Action Handlers ---
-
-const handleHighlight = () => {
-  if (!textareaRef.value) return;
-  const start = textareaRef.value.selectionStart;
-  const end = textareaRef.value.selectionEnd;
-  const content = localContent.value;
-
-  if (isHighlighted.value) {
-    // Logic to REMOVE highlight (find the surrounding ==)
-    const regex = /==/g;
-    let match;
-    let markers: number[] = [];
-    while ((match = regex.exec(content)) !== null) {
-      markers.push(match.index);
-    }
-    
-    // Find the pair surrounding the cursor
-    for (let i = 0; i < markers.length; i += 2) {
-      const mStart = markers[i];
-      const mEnd = (markers[i+1] || 0) + 2;
-      if (start >= mStart && start <= mEnd) {
-        localContent.value = content.slice(0, mStart) + content.slice(mStart + 2, markers[i+1]) + content.slice(mEnd);
-        break;
-      }
-    }
-  } else {
-    // Logic to ADD highlight
-    if (start === end) {
-      localContent.value = content.slice(0, start) + '====' + content.slice(end);
-      setTimeout(() => {
-        if (textareaRef.value) textareaRef.value.setSelectionRange(start + 2, start + 2);
-      }, 0);
-    } else {
-      localContent.value = content.slice(0, start) + '==' + content.slice(start, end) + '==' + content.slice(end);
-    }
-  }
-  textareaRef.value.focus();
-};
-
-const handleUndo = () => {
-  document.execCommand('undo');
+const handleAIApply = ({ content }: { content: string }) => {
+  localContent.value = content;
   textareaRef.value?.focus();
-};
-
-const handleFormat = () => {
-  const lines = localContent.value.split('\n');
-  const formatted = lines
-    .map(line => line.trimEnd())
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n');
-  localContent.value = formatted;
-  textareaRef.value?.focus();
-};
-
-const toggleSearch = () => {
-  searchOpen.value = !searchOpen.value;
-  if (!searchOpen.value) {
-    searchResults.value = [];
-    currentResultIndex.value = -1;
-  }
-};
-
-const performSearch = () => {
-  if (!searchQuery.value) {
-    searchResults.value = [];
-    return;
-  }
-  const content = localContent.value;
-  try {
-    const regex = new RegExp(searchQuery.value, 'gi');
-    let match;
-    const indices: number[] = [];
-    while ((match = regex.exec(content)) !== null) {
-      indices.push(match.index);
-    }
-    searchResults.value = indices;
-    if (indices.length > 0) {
-      currentResultIndex.value = 0;
-      highlightSearchResult();
-    }
-  } catch (e) {
-    // Invalid regex
-    searchResults.value = [];
-  }
-};
-
-const nextSearchResult = () => {
-  if (searchResults.value.length === 0) return;
-  currentResultIndex.value = (currentResultIndex.value + 1) % searchResults.value.length;
-  highlightSearchResult();
-};
-
-const prevSearchResult = () => {
-  if (searchResults.value.length === 0) return;
-  currentResultIndex.value = (currentResultIndex.value - 1 + searchResults.value.length) % searchResults.value.length;
-  highlightSearchResult();
-};
-
-const highlightSearchResult = () => {
-  if (textareaRef.value && currentResultIndex.value !== -1) {
-    const start = searchResults.value[currentResultIndex.value];
-    textareaRef.value.setSelectionRange(start, start + searchQuery.value.length);
-    textareaRef.value.focus();
-    
-    // Scroll calculation
-    const lineHeight = 1.5 * 14; 
-    const line = localContent.value.substring(0, start).split('\n').length;
-    textareaRef.value.scrollTop = (line - 5) * lineHeight;
-  }
-};
-
-const performReplace = () => {
-  if (!searchQuery.value || currentResultIndex.value === -1) return;
-  const content = localContent.value;
-  const s = textareaRef.value?.selectionStart || 0;
-  const e = textareaRef.value?.selectionEnd || 0;
-  localContent.value = content.slice(0, s) + replaceQuery.value + content.slice(e);
-  performSearch();
-};
-
-const replaceAll = () => {
-  if (!searchQuery.value) return;
-  const regex = new RegExp(searchQuery.value, 'gi');
-  localContent.value = localContent.value.replace(regex, replaceQuery.value);
-  toggleSearch();
-};
-
-const handleAIApply = ({ content, promptId }: { content: string, promptId?: string }) => {
-  if (promptId === 'last_line') {
-    // If it was a last_line command, we remove the last line from the original content
-    // before applying the AI's version (which hopefully already removed it or processed it)
-    const lines = localContent.value.trim().split('\n');
-    if (lines.length > 0) {
-      // We check if the AI's content already looks like it replaced the whole thing
-      // The backend 'last_line' logic sends 'precedingContent' as part of the context.
-      // If we just set localContent to the new content, it should be fine.
-      localContent.value = content;
-    }
-  } else {
-    localContent.value = content;
-  }
-  textareaRef.value?.focus();
-};
-
-const handleEscape = () => {
-  if (!textareaRef.value) return;
-  const start = textareaRef.value.selectionStart;
-  const end = textareaRef.value.selectionEnd;
-  const content = localContent.value;
-  const selectedText = content.substring(start, end);
-  
-  // Escape Markdown characters
-  const escaped = selectedText.replace(/([\\`*_{}[\]()#+\-.!])/g, '\\$1');
-  
-  localContent.value = content.slice(0, start) + escaped + content.slice(end);
-  textareaRef.value.focus();
-};
-
-const handleHeader = () => {
-  if (!textareaRef.value) return;
-  const start = textareaRef.value.selectionStart;
-  const content = localContent.value;
-  
-  // Find start of current line
-  const lastNewline = content.lastIndexOf('\n', start - 1);
-  const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
-  
-  const line = content.substring(lineStart, content.indexOf('\n', lineStart) === -1 ? content.length : content.indexOf('\n', lineStart));
-  
-  if (line.startsWith('# ')) {
-    localContent.value = content.slice(0, lineStart) + line.substring(2) + content.slice(lineStart + line.length);
-  } else {
-    localContent.value = content.slice(0, lineStart) + '# ' + line + content.slice(lineStart + line.length);
-  }
-  textareaRef.value.focus();
-};
-
-const handleList = () => {
-  if (!textareaRef.value) return;
-  const start = textareaRef.value.selectionStart;
-  const end = textareaRef.value.selectionEnd;
-  const content = localContent.value;
-  
-  // Find the lines covered by the selection
-  const lastNewlineBefore = content.lastIndexOf('\n', start - 1);
-  const startPos = lastNewlineBefore === -1 ? 0 : lastNewlineBefore + 1;
-  const endPos = content.indexOf('\n', end) === -1 ? content.length : content.indexOf('\n', end);
-  
-  const selectedText = content.substring(startPos, endPos);
-  const lines = selectedText.split('\n');
-  
-  const allList = lines.every(line => line.startsWith('- '));
-  const newLines = allList 
-    ? lines.map(line => line.substring(2))
-    : lines.map(line => line.startsWith('- ') ? line : '- ' + line);
-    
-  localContent.value = content.slice(0, startPos) + newLines.join('\n') + content.slice(endPos);
-  textareaRef.value.focus();
-};
-
-const handleLink = () => {
-  if (!textareaRef.value) return;
-  const start = textareaRef.value.selectionStart;
-  const end = textareaRef.value.selectionEnd;
-  const content = localContent.value;
-  const selectedText = content.substring(start, end);
-  
-  const linkTemplate = `[${selectedText}](url)`;
-  localContent.value = content.slice(0, start) + linkTemplate + content.slice(end);
-  
-  setTimeout(() => {
-    if (textareaRef.value) {
-      const newStart = start + linkTemplate.length - 4; // Inside (url)
-      textareaRef.value.setSelectionRange(newStart, newStart + 3);
-      textareaRef.value.focus();
-    }
-  }, 0);
 };
 
 // Sync local content when store changes (e.g. file opened or websocket update)
@@ -408,6 +184,23 @@ watch(localContent, (newContent) => {
       @apply="handleAIApply"
     />
 
+    <BottomBar
+      :is-highlighted="isHighlighted"
+      :can-undo="true"
+      :is-processing="false"
+      :word-count="wordCount"
+      :reading-time="readingTime"
+      @highlight="handleHighlight"
+      @undo="handleUndo"
+      @format="handleFormat"
+      @header="handleHeader"
+      @list="handleList"
+      @link="handleLink"
+      @escape="handleEscape"
+      @select-prompt="(id: string) => aiPanelOpen = true"
+      @run-prompt="() => aiPanelOpen = true"
+    />
+
     <Teleport v-if="!previewMode" to="#top-bar-actions">
       <div class="editor-top-actions">
         <!-- Preview Mode -->
@@ -438,51 +231,17 @@ watch(localContent, (newContent) => {
 
         <div class="top-divider"></div>
 
-        <!-- Consolidated Text Actions -->
-        <mdui-dropdown @pointerdown.prevent @mousedown.prevent>
-          <mdui-button-icon 
-            slot="trigger" 
-            tooltip="Text Actions" 
-            style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-            tabindex="-1"
-            @pointerdown.prevent 
-            @mousedown.prevent
-          >
-            <mdui-icon-text-fields></mdui-icon-text-fields>
-          </mdui-button-icon>
-          <mdui-menu @pointerdown.prevent @mousedown.prevent tabindex="-1">
-            <mdui-menu-item @click="handleHighlight" @pointerdown.prevent @mousedown.prevent tabindex="-1" style="color: #CDDC39; --mdui-menu-item-height: 40px; font-size: 14px;">
-              <mdui-icon-format-color-reset v-if="isHighlighted" slot="icon"></mdui-icon-format-color-reset>
-              <mdui-icon-border-color v-else slot="icon"></mdui-icon-border-color>
-              Highlight
-            </mdui-menu-item>
-            <mdui-menu-item @click="handleHeader" @pointerdown.prevent @mousedown.prevent tabindex="-1" style="color: #CDDC39; --mdui-menu-item-height: 40px; font-size: 14px;">
-              <mdui-icon-title slot="icon"></mdui-icon-title>
-              Header
-            </mdui-menu-item>
-            <mdui-menu-item @click="handleList" @pointerdown.prevent @mousedown.prevent tabindex="-1" style="color: #CDDC39; --mdui-menu-item-height: 40px; font-size: 14px;">
-              <mdui-icon-format-list-bulleted slot="icon"></mdui-icon-format-list-bulleted>
-              List
-            </mdui-menu-item>
-            <mdui-menu-item @click="handleLink" @pointerdown.prevent @mousedown.prevent tabindex="-1" style="color: #CDDC39; --mdui-menu-item-height: 40px; font-size: 14px;">
-              <mdui-icon-link slot="icon"></mdui-icon-link>
-              Link
-            </mdui-menu-item>
-            <mdui-menu-item @click="handleEscape" @pointerdown.prevent @mousedown.prevent tabindex="-1" style="color: #CDDC39; --mdui-menu-item-height: 40px; font-size: 14px;">
-              <mdui-icon-data-object slot="icon"></mdui-icon-data-object>
-              Escape MD
-            </mdui-menu-item>
-            <mdui-divider></mdui-divider>
-            <mdui-menu-item @click="handleUndo" @pointerdown.prevent @mousedown.prevent tabindex="-1" style="color: #CDDC39; --mdui-menu-item-height: 40px; font-size: 14px;">
-              <mdui-icon-undo slot="icon"></mdui-icon-undo>
-              Undo
-            </mdui-menu-item>
-            <mdui-menu-item @click="handleFormat" @pointerdown.prevent @mousedown.prevent tabindex="-1" style="color: #CDDC39; --mdui-menu-item-height: 40px; font-size: 14px;">
-              <mdui-icon-spellcheck slot="icon"></mdui-icon-spellcheck>
-              Auto-format
-            </mdui-menu-item>
-          </mdui-menu>
-        </mdui-dropdown>
+        <!-- Search -->
+        <mdui-button-icon 
+          @click="toggleSearch"
+          tooltip="Search & Replace"
+          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
+          tabindex="-1"
+          @pointerdown.prevent
+          @mousedown.prevent
+        >
+          <mdui-icon-search></mdui-icon-search>
+        </mdui-button-icon>
 
         <div class="top-divider"></div>
 
@@ -496,20 +255,6 @@ watch(localContent, (newContent) => {
           :style="{ color: aiPanelOpen ? '#CDDC39' : 'inherit', '--mdui-button-icon-size': '40px' }"
         >
           <mdui-icon-auto-awesome></mdui-icon-auto-awesome>
-        </mdui-button-icon>
-
-        <div class="top-divider"></div>
-
-        <!-- Search -->
-        <mdui-button-icon 
-          @click="toggleSearch"
-          tooltip="Search & Replace"
-          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-          tabindex="-1"
-          @pointerdown.prevent
-          @mousedown.prevent
-        >
-          <mdui-icon-search></mdui-icon-search>
         </mdui-button-icon>
       </div>
     </Teleport>
