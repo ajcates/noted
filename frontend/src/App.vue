@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch, defineAsyncComponent } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
-import FileBrowser from '@/components/FileBrowser.vue';
-import Editor from '@/components/Editor.vue';
 import Login from '@/components/Login.vue';
 import ConflictResolver from '@/components/ConflictResolver.vue';
+
+const FileBrowser = defineAsyncComponent(() => import('@/components/FileBrowser.vue'));
+const Editor = defineAsyncComponent(() => import('@/components/Editor.vue'));
 
 import '@mdui/icons/menu.js';
 import '@mdui/icons/history.js';

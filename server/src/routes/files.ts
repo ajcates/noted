@@ -38,14 +38,22 @@ export function createFilesRouter(config: AppConfig) {
       ctx.throw(400, 'Path is required');
     }
 
-    const targetPath = resolveSafePath(config.rootPath, relativePath);
-    const stats = await fs.stat(targetPath);
+    try {
+      const targetPath = resolveSafePath(config.rootPath, relativePath);
+      const stats = await fs.stat(targetPath);
 
-    if (stats.isDirectory()) {
-      ctx.throw(400, 'Cannot read a directory as a file');
+      if (stats.isDirectory()) {
+        ctx.throw(400, 'Cannot read a directory as a file');
+      }
+
+      ctx.body = await fs.readFile(targetPath, 'utf-8');
+    } catch (err: any) {
+      if (err.status) throw err; // Re-throw koa errors (e.g. 400 from above)
+      if (err.code === 'ENOENT') {
+        ctx.throw(404, 'File not found');
+      }
+      ctx.throw(500, `Failed to read file: ${err.message}`);
     }
-
-    ctx.body = await fs.readFile(targetPath, 'utf-8');
   });
 
   /**
@@ -58,9 +66,14 @@ export function createFilesRouter(config: AppConfig) {
     const { path: relativePath, content } = ctx.request.body as any;
     if (!relativePath) ctx.throw(400, 'Path is required');
 
-    const targetPath = resolveSafePath(config.rootPath, relativePath);
-    await fs.writeFile(targetPath, content, 'utf-8');
-    ctx.body = { success: true };
+    try {
+      const targetPath = resolveSafePath(config.rootPath, relativePath);
+      await fs.writeFile(targetPath, content, 'utf-8');
+      ctx.body = { success: true };
+    } catch (err: any) {
+      if (err.status) throw err;
+      ctx.throw(500, `Failed to write file: ${err.message}`);
+    }
   });
 
   /**
@@ -73,14 +86,22 @@ export function createFilesRouter(config: AppConfig) {
     const { path: relativePath, type } = ctx.request.body as any;
     if (!relativePath) ctx.throw(400, 'Path is required');
 
-    const targetPath = resolveSafePath(config.rootPath, relativePath);
+    try {
+      const targetPath = resolveSafePath(config.rootPath, relativePath);
 
-    if (type === 'directory') {
-      await fs.ensureDir(targetPath);
-    } else {
-      await fs.ensureFile(targetPath);
+      if (type === 'directory') {
+        await fs.ensureDir(targetPath);
+      } else {
+        await fs.ensureFile(targetPath);
+      }
+      ctx.body = { success: true };
+    } catch (err: any) {
+      if (err.status) throw err;
+      if (err.code === 'EEXIST') {
+        ctx.throw(409, 'File or directory already exists');
+      }
+      ctx.throw(500, `Failed to create: ${err.message}`);
     }
-    ctx.body = { success: true };
   });
 
   /**
@@ -93,11 +114,19 @@ export function createFilesRouter(config: AppConfig) {
     const { oldPath, newPath } = ctx.request.body as any;
     if (!oldPath || !newPath) ctx.throw(400, 'Both oldPath and newPath are required');
 
-    const oldTargetPath = resolveSafePath(config.rootPath, oldPath);
-    const newTargetPath = resolveSafePath(config.rootPath, newPath);
+    try {
+      const oldTargetPath = resolveSafePath(config.rootPath, oldPath);
+      const newTargetPath = resolveSafePath(config.rootPath, newPath);
 
-    await fs.move(oldTargetPath, newTargetPath);
-    ctx.body = { success: true };
+      await fs.move(oldTargetPath, newTargetPath);
+      ctx.body = { success: true };
+    } catch (err: any) {
+      if (err.status) throw err;
+      if (err.code === 'ENOENT') {
+        ctx.throw(404, 'Source file not found');
+      }
+      ctx.throw(500, `Failed to rename: ${err.message}`);
+    }
   });
 
   /**
@@ -110,9 +139,14 @@ export function createFilesRouter(config: AppConfig) {
     const { path: relativePath } = ctx.request.body as any;
     if (!relativePath) ctx.throw(400, 'Path is required');
 
-    const targetPath = resolveSafePath(config.rootPath, relativePath);
-    await fs.remove(targetPath);
-    ctx.body = { success: true };
+    try {
+      const targetPath = resolveSafePath(config.rootPath, relativePath);
+      await fs.remove(targetPath);
+      ctx.body = { success: true };
+    } catch (err: any) {
+      if (err.status) throw err;
+      ctx.throw(500, `Failed to delete: ${err.message}`);
+    }
   });
 
   /**

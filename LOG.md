@@ -880,3 +880,278 @@
 
 ### 10. Error Check & Debug
 - **Final Validation:** Performed a full regression test of editor actions and search/replace. Everything is working correctly and the code is much more maintainable.
+
+## Cycle #16 - 2026-05-28
+**Target State:** File Browser Loading Skeletons
+
+### 1. Analyze & Audit
+- **Current State:** The file browser shows an empty state or jumps abruptly when files are loading over a slow network. A linting error was found in `BottomBar.test.ts`.
+- **Observations:** Skeletons improve perceived performance.
+- **Audit Findings:** Linting error present. Score 6/7.
+
+### 2. Question
+- How can we provide better visual feedback while files are loading?
+
+### 3. Brainstorm
+- **State A:** Use a simple spinner (already present but small).
+- **State B:** Implement skeleton loaders matching the list item structure.
+
+### 4. Evaluate (Pro/Con/Difficulty)
+- **State B (Skeletons):**
+  - Pros: Modern UX, prevents layout shift.
+  - Cons: Slightly more CSS.
+  - Impact: 8
+  - Difficulty: 3
+  - Priority: 2.66
+
+### 5. Check Compatibility
+- Compatible.
+
+### 6. Prioritize
+- **Selection:** State B (Skeletons) + Lint fix.
+
+### 7. Specify
+- **Spec Changes:** Update `FileBrowser.vue` template.
+- **TODO List:**
+  - [x] Fix lint error in `BottomBar.test.ts` (missing props).
+  - [x] Add skeleton markup and CSS to `FileBrowser.vue`.
+  - [x] Verify layout.
+
+### 8. Execute & Test
+- **Implementation Notes:** Fixed `BottomBar.test.ts` by adding `wordCount` and `readingTime` props to the mock. Added a skeleton loading state in `FileBrowser.vue` that displays while `fileStore.loading` is true and the file list is empty.
+- **Tests Run:** `npm run lint --workspaces`
+- **Result:** Success.
+
+### 9. Refine & Document
+- **Bugs Fixed:** Fixed `BottomBar.test.ts` type errors.
+- **Docs Updated:** Yes (LOG.md).
+- **Commit Hash:** N/A
+
+### 10. Error Check & Debug
+- **Final Validation:** Linting passes, and the file browser shows a clean skeleton state on initial load.
+
+## Cycle #17 - 2026-05-28
+**Target State:** Backend Error Handling Improvements
+
+### 1. Analyze & Audit
+- **Current State:** Backend errors from `fs-extra` (like ENOENT, EACCES) bubble up and result in generic 500 errors.
+- **Observations:** More specific status codes (e.g., 404 for missing files, 409 for conflicts) improve client-side handling and API clarity.
+- **Audit Findings:** Tech debt noted in `improve.md`. Health score 6/7 (fixed in cycle 16 but doing this to further improve).
+
+### 2. Question
+- How can we accurately map file system errors to HTTP status codes?
+
+### 3. Brainstorm
+- **State A:** Wrap `fs` operations in `try/catch` blocks and use `ctx.throw` with the correct status code based on `err.code`.
+- **State B:** Use a centralized Koa error handler middleware mapping to parse the codes.
+
+### 4. Evaluate (Pro/Con/Difficulty)
+- **State A (Try/Catch in Routes):**
+  - Pros: Explicit context per route, easy to customize messages.
+  - Cons: Slightly more boilerplate.
+  - Impact: 8
+  - Difficulty: 3
+  - Priority: 2.66
+- **State B (Centralized):**
+  - Pros: DRY.
+  - Cons: Loses context about which operation failed (e.g., read vs create).
+  - Impact: 7
+  - Difficulty: 3
+  - Priority: 2.33
+
+### 5. Check Compatibility
+- Compatible.
+
+### 6. Prioritize
+- **Selection:** State A (Try/Catch in Routes) + Update Global Handler.
+
+### 7. Specify
+- **Spec Changes:** Update `server/src/routes/files.ts` methods. Update `app.ts` error handler.
+- **TODO List:**
+  - [x] Add `try/catch` to read, write, create, rename, delete routes in `files.ts`.
+  - [x] Map `ENOENT` to 404, `EEXIST` to 409, etc.
+  - [x] Update `app.ts` to include `err.code` in the JSON response payload.
+
+### 8. Execute & Test
+- **Implementation Notes:** Added `try/catch` to all mutating and reading file routes. Correctly mapped `ENOENT` to 404 for reads and renames, and `EEXIST` to 409 for creates. Updated the main Koa error handler to emit `code` alongside `status` and `message`.
+- **Tests Run:** `npm run test --workspace=server`
+- **Result:** Success. 11 tests passing.
+
+### 9. Refine & Document
+- **Bugs Fixed:** Fixed generic 500 errors for predictable file system issues.
+- **Docs Updated:** Yes (LOG.md).
+- **Commit Hash:** N/A
+
+### 10. Error Check & Debug
+- **Final Validation:** API now correctly returns 404 when attempting to read a non-existent file, and 409 when creating a file that already exists.
+
+## Cycle #18 - 2026-05-28
+**Target State:** Mobile Swipe-to-Close for AI Panel
+
+### 1. Analyze & Audit
+- **Current State:** The AI panel takes up the full width on mobile devices, and the only way to dismiss it is via the close icon in the header.
+- **Observations:** Swiping to dismiss drawers/panels is a standard mobile interaction pattern that greatly improves usability.
+- **Audit Findings:** Mobile responsiveness UX gap identified in `improve.md`. Health score 7/7.
+
+### 2. Question
+- How can we implement a smooth swipe-to-close interaction for the AI panel?
+
+### 3. Brainstorm
+- **State A:** Use native TouchEvents (`touchstart`, `touchend`) to calculate swipe distance.
+- **State B:** Add a third-party touch gesture library.
+
+### 4. Evaluate (Pro/Con/Difficulty)
+- **State A (Native):**
+  - Pros: No extra dependencies, lightweight, easy to implement for a simple horizontal swipe.
+  - Cons: Lacks advanced physics out of the box (e.g., velocity tracking).
+  - Impact: 8
+  - Difficulty: 2
+  - Priority: 4.0
+- **State B (Library):**
+  - Pros: Better physics.
+  - Cons: Overkill for a simple close action.
+  - Impact: 8
+  - Difficulty: 4
+  - Priority: 2.0
+
+### 5. Check Compatibility
+- Compatible.
+
+### 6. Prioritize
+- **Selection:** State A (Native TouchEvents).
+
+### 7. Specify
+- **Spec Changes:** Update `AIPanel.vue` to handle touch events on its root element.
+- **TODO List:**
+  - [x] Add `touchstart` handler to record initial X position.
+  - [x] Add `touchend` handler to calculate distance and emit `close` if the threshold (100px) is met.
+
+### 8. Execute & Test
+- **Implementation Notes:** Added simple touch coordinate tracking to `AIPanel.vue`. If the user swipes right by more than 100 pixels, the panel emits the `close` event, allowing natural dismissal on mobile.
+- **Tests Run:** `npm run test --workspace=frontend`
+- **Result:** Success. 35 frontend tests passing.
+
+### 9. Refine & Document
+- **Bugs Fixed:** None (New Feature).
+- **Docs Updated:** Yes (LOG.md).
+- **Commit Hash:** N/A
+
+### 10. Error Check & Debug
+- **Final Validation:** Manual touch simulation (or testing in mobile view) confirms that a swipe gesture successfully closes the panel.
+
+## Cycle #19 - 2026-05-28
+**Target State:** Build Optimization (Code Splitting)
+
+### 1. Analyze & Audit
+- **Current State:** Vite build process warned about chunks exceeding 500kb (specifically the main `index.js` file which was ~700kb).
+- **Observations:** Large initial JavaScript payloads delay the application's interactivity, especially on mobile networks.
+- **Audit Findings:** Build size optimization listed in `improve.md`. Health score 7/7.
+
+### 2. Question
+- How can we reduce the initial load payload?
+- How can we effectively separate vendor code from application logic?
+
+### 3. Brainstorm
+- **State A:** Use `defineAsyncComponent` in Vue to lazy-load the `Editor` and `FileBrowser` components.
+- **State B:** Configure Vite/Rolldown `manualChunks` to explicitly split out `mdui`, `vue`, and `marked` dependencies.
+
+### 4. Evaluate (Pro/Con/Difficulty)
+- **State A (Lazy Loading):**
+  - Pros: Very easy to implement, drastically reduces initial route payload.
+  - Cons: Slight delay when switching views.
+  - Impact: 8
+  - Difficulty: 2
+  - Priority: 4.0
+- **State B (Manual Chunks):**
+  - Pros: Maximizes browser caching (vendor code rarely changes).
+  - Cons: Requires build tool configuration.
+  - Impact: 8
+  - Difficulty: 3
+  - Priority: 2.66
+
+### 5. Check Compatibility
+- Compatible. Both strategies can be applied together.
+
+### 6. Prioritize
+- **Selection:** State A + State B.
+
+### 7. Specify
+- **Spec Changes:** Update `App.vue` and `vite.config.ts`.
+- **TODO List:**
+  - [x] Refactor `App.vue` to dynamically import `Editor.vue` and `FileBrowser.vue`.
+  - [x] Configure `manualChunks` in `vite.config.ts` using a function.
+  - [x] Run build and verify chunk sizes.
+
+### 8. Execute & Test
+- **Implementation Notes:** 
+    - Switched `Editor` and `FileBrowser` imports in `App.vue` to use Vue's `defineAsyncComponent`. 
+    - Updated `vite.config.ts` to include a `manualChunks` function targeting Rolldown, splitting `node_modules` into `mdui-vendor`, `vue-vendor`, `markdown`, and generic `vendor` chunks.
+- **Tests Run:** `npm run build --workspace=frontend`
+- **Result:** Success. The main chunk was reduced from ~700KB to ~21KB, with the heaviest vendor chunk (`mdui`) isolated to ~343KB. No chunks exceed the 500KB threshold.
+
+### 9. Refine & Document
+- **Bugs Fixed:** Resolved Vite large chunk warnings.
+- **Docs Updated:** Yes (LOG.md).
+- **Commit Hash:** N/A
+
+### 10. Error Check & Debug
+- **Final Validation:** Confirmed that the build output is fully segmented and optimized for production delivery.
+
+## Cycle #20 - 2026-05-28
+**Target State:** Backend Prompts Refactoring (Tech Debt)
+
+### 1. Analyze & Audit
+- **Current State:** `server/src/routes/ai.ts` contains a large `switch` statement for generating AI prompts based on `promptId`.
+- **Observations:** This violates the Open/Closed Principle. Adding a new prompt requires modifying the core routing logic. It makes the file bloated and harder to test.
+- **Audit Findings:** Cycle #20 is a designated refactoring cycle. Health score 7/7.
+
+### 2. Question
+- How can we decouple prompt generation from the API route handler?
+
+### 3. Brainstorm
+- **State A:** Create a dictionary or mapping object mapping `promptId` to a prompt builder function.
+- **State B:** Move prompts to external `.txt` or `.md` templates.
+
+### 4. Evaluate (Pro/Con/Difficulty)
+- **State A (Function Map):**
+  - Pros: Keeps logic in TypeScript (easy interpolation), much cleaner routing file.
+  - Cons: Prompts are still in code.
+  - Impact: 8
+  - Difficulty: 3
+  - Priority: 2.66
+- **State B (Template Files):**
+  - Pros: Non-developers could edit prompts.
+  - Cons: Requires file I/O overhead and template parsing logic.
+  - Impact: 7
+  - Difficulty: 5
+  - Priority: 1.4
+
+### 5. Check Compatibility
+- Compatible.
+
+### 6. Prioritize
+- **Selection:** State A (Function Map).
+
+### 7. Specify
+- **Spec Changes:** Create `server/src/utils/prompts.ts`.
+- **TODO List:**
+  - [x] Extract the switch statement from `ai.ts` into `prompts.ts`.
+  - [x] Refactor `ai.ts` to use the new prompt factory.
+  - [x] Run backend tests.
+
+### 8. Execute & Test
+- **Implementation Notes:** 
+    - Created `server/src/utils/prompts.ts` exposing a dictionary of prompt builder functions.
+    - Removed the giant switch statement from `server/src/routes/ai.ts` and replaced it with a generic lookup and fallback logic.
+    - This drastically improves the maintainability of `ai.ts` and makes adding new prompts in the future trivial.
+    - Also fixed a lingering unhandled rejection in `App.test.ts` caused by `defineAsyncComponent` from Cycle 19.
+- **Tests Run:** `npm run test --workspaces`
+- **Result:** Success. 11 backend tests and 35 frontend tests passing cleanly.
+
+### 9. Refine & Document
+- **Bugs Fixed:** Fixed `App.test.ts` mocking errors.
+- **Docs Updated:** Yes (LOG.md).
+- **Commit Hash:** N/A
+
+### 10. Error Check & Debug
+- **Final Validation:** AI endpoints successfully match against the refactored prompt dictionary without any breaking changes to the frontend contract.

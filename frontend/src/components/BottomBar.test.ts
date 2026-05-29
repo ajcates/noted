@@ -8,7 +8,9 @@ describe('BottomBar.vue', () => {
       props: {
         isHighlighted: false,
         canUndo: true,
-        isProcessing: false
+        isProcessing: false,
+        wordCount: 0,
+        readingTime: 0
       }
     });
 
@@ -24,7 +26,9 @@ describe('BottomBar.vue', () => {
       props: {
         isHighlighted: false,
         canUndo: true,
-        isProcessing: false
+        isProcessing: false,
+        wordCount: 0,
+        readingTime: 0
       }
     });
 
@@ -38,7 +42,9 @@ describe('BottomBar.vue', () => {
       props: {
         isHighlighted: false,
         canUndo: false,
-        isProcessing: false
+        isProcessing: false,
+        wordCount: 0,
+        readingTime: 0
       }
     });
 

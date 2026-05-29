@@ -176,13 +176,15 @@ watch(localContent, (newContent) => {
       @select="updateSelection"
     ></textarea>
     
-    <AIPanel 
-      :open="aiPanelOpen" 
-      :selected-text="localContent.substring(selectionStart, selectionEnd)"
-      :full-content="localContent"
-      @close="aiPanelOpen = false"
-      @apply="handleAIApply"
-    />
+    <Teleport to="body">
+      <AIPanel 
+        :open="aiPanelOpen" 
+        :selected-text="localContent.substring(selectionStart, selectionEnd)"
+        :full-content="localContent"
+        @close="aiPanelOpen = false"
+        @apply="handleAIApply"
+      />
+    </Teleport>
 
     <BottomBar
       :is-highlighted="isHighlighted"

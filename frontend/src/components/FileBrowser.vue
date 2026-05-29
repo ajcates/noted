@@ -147,6 +147,17 @@ const isFabOpen = ref(false);
       </div>
     </div>
 
+    <!-- Loading Skeleton -->
+    <div v-else-if="fileStore.loading && fileStore.files.length === 0" class="list-surface">
+      <mdui-list style="background-color: transparent;">
+        <mdui-list-item v-for="i in 5" :key="i">
+          <div slot="icon" class="skeleton-icon"></div>
+          <div class="skeleton-text skeleton-title"></div>
+          <div slot="description" class="skeleton-text skeleton-desc"></div>
+        </mdui-list-item>
+      </mdui-list>
+    </div>
+
     <div v-else class="list-surface">
       <mdui-list style="background-color: transparent;">
         <mdui-list-item 
@@ -369,5 +380,34 @@ mdui-menu-item::part(label) {
 }
 .list-move {
   transition: transform 0.3s ease;
+}
+
+/* Skeleton Loading Styles */
+.skeleton-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.1);
+  animation: pulse 1.5s infinite ease-in-out;
+}
+.skeleton-text {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+.skeleton-title {
+  height: 14px;
+  width: 60%;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+.skeleton-desc {
+  height: 12px;
+  width: 40%;
+}
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.3; }
+  100% { opacity: 0.6; }
 }
 </style>

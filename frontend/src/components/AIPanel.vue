@@ -63,10 +63,28 @@ const applyResult = (content: string, promptId?: string) => {
 const copyToClipboard = (text: string) => {
   navigator.clipboard.writeText(text);
 };
+
+// Swipe to close logic
+let touchStartX = 0;
+const onTouchStart = (e: TouchEvent) => {
+  touchStartX = e.changedTouches[0].screenX;
+};
+const onTouchEnd = (e: TouchEvent) => {
+  const touchEndX = e.changedTouches[0].screenX;
+  // Swipe right (threshold 100px)
+  if (touchEndX - touchStartX > 100) {
+    emit('close');
+  }
+};
 </script>
 
 <template>
-  <div class="ai-panel" :class="{ 'open': open }">
+  <div 
+    class="ai-panel" 
+    :class="{ 'open': open }"
+    @touchstart="onTouchStart"
+    @touchend="onTouchEnd"
+  >
     <div class="panel-header">
       <div class="header-title">
         <mdui-icon-auto-awesome style="margin-right: 8px; color: #CDDC39;"></mdui-icon-auto-awesome>
@@ -165,12 +183,12 @@ const copyToClipboard = (text: string) => {
 .ai-panel {
   position: fixed;
   top: 56px;
+  bottom: 0;
   right: -320px;
   width: 320px;
-  height: calc(100dvh - 56px);
   background-color: rgb(var(--mdui-color-surface-container));
   box-shadow: var(--mdui-elevation-level3);
-  z-index: 1000;
+  z-index: 9999;
   display: flex;
   flex-direction: column;
   transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -298,6 +316,7 @@ const copyToClipboard = (text: string) => {
 
 .chat-input-area {
   padding: 16px;
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
   background-color: rgb(var(--mdui-color-surface-container-high));
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }

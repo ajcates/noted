@@ -2,6 +2,7 @@ import Router from '@koa/router';
 import { AppConfig } from '../config.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PassThrough } from 'stream';
+import { prompts, defaultPrompt } from '../utils/prompts.js';
 
 export function createAiRouter(config: AppConfig) {
   const router = new Router({ prefix: '/api/ai' });
@@ -38,7 +39,7 @@ Guidelines:
 - Respond ONLY with the JSON object. Do not include any other text before or after the JSON.`;
 
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-flash',
+    model: 'gemini-3.5-flash',
     systemInstruction: systemPrompt
   });
 
@@ -51,41 +52,8 @@ Guidelines:
       ? `USER CUSTOM INSTRUCTIONS (PRIORITIZE THESE):\n${customInstructions}\n\n`
       : '';
 
-    let userPrompt = '';
-    switch (promptId) {
-      case 'restructure':
-        userPrompt = `${instructionPrefix}Restructure the following note to improve logical flow and structural clarity. Group related ideas, use headings, and bulleted lists where appropriate. Focus on the selection if provided.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
-        break;
-      case 'clarify':
-        userPrompt = `${instructionPrefix}Clarify the following note by simplifying complex language and rephrasing jargon or convoluted sentences. Focus on the selection if provided.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
-        break;
-      case 'elaborate':
-        userPrompt = `${instructionPrefix}Elaborate on the following note by adding depth, explanations, and context. Build upon existing ideas with examples. Focus on the selection if provided.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
-        break;
-      case 'add_info':
-        userPrompt = `${instructionPrefix}Identify and fill in missing gaps in the following note. Inject relevant facts, definitions, or supplementary details. Focus on the selection if provided.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
-        break;
-      case 'add_perspective':
-        userPrompt = `${instructionPrefix}Introduce alternative viewpoints, counter-arguments, or different professional/cultural angles to the following note. Focus on the selection if provided.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
-        break;
-      case 'fact_check':
-        userPrompt = `${instructionPrefix}Fact check the following note for accuracy and logical soundness. Highlight potentially inaccurate claims and suggest corrections. Focus on the selection if provided.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
-        break;
-      case 'better_suggestion':
-        userPrompt = `${instructionPrefix}Generate 4 distinct stylistic variations (e.g., professional, casual, concise, persuasive) for the following content. Present them ONLY as options in the "questions" field of your JSON response, with the question being "Which style do you prefer?". Set "content" to null in your response.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
-        break;
-      case 'last_line':
-        const lines = (fullContent || '').trim().split('\n');
-        const lastLine = lines[lines.length - 1];
-        const precedingContent = lines.slice(0, -1).join('\n');
-        userPrompt = `${instructionPrefix}Execute the following command on the preceding content. Replace or append the result as appropriate.${contextInfo}\n\nCommand: "${lastLine}"\n\nPreceding Content:\n${precedingContent}`;
-        break;
-      case 'chat':
-        userPrompt = `${instructionPrefix}User message: ${selection || ''}\n\nNote Context:\n${fullContent}${contextInfo}`;
-        break;
-      default:
-        userPrompt = `${instructionPrefix}Process the following note based on user request. Focus on selection if provided.${contextInfo}\n\nSelection: ${selection || 'None'}\n\nFull Content:\n${fullContent}`;
-    }
+    const builder = prompts[promptId] || defaultPrompt;
+    const userPrompt = builder(instructionPrefix, contextInfo, selection || '', fullContent);
 
     const cleanHistory = history.length > 0 ? history.slice(0, -1).map((h: any) => ({
       role: h.role === 'model' ? 'model' : 'user',
@@ -116,7 +84,7 @@ Guidelines:
       const chat = model.startChat({
         history: cleanHistory,
         generationConfig: {
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
           responseMimeType: 'application/json',
         },
       });
@@ -130,7 +98,15 @@ Guidelines:
       stream.end();
     } catch (error: any) {
       console.error('Error in AI stream:', error);
-      stream.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      let errorMessage = error.message || 'An unknown error occurred';
+      if (error.status === 503) {
+        errorMessage = 'The AI service is currently overloaded or unavailable (503). Please try again in a few moments.';
+      } else if (error.status === 429) {
+        errorMessage = 'You have exceeded the rate limit for the AI service (429). Please wait a bit before trying again.';
+      } else if (error.status === 403) {
+        errorMessage = 'Access denied (403). Please check if your Gemini API key is valid.';
+      }
+      stream.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
       stream.end();
     }
   });
@@ -151,7 +127,7 @@ Guidelines:
       const chat = model.startChat({
         history: cleanHistory,
         generationConfig: {
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
           responseMimeType: 'application/json',
         },
       });
@@ -160,7 +136,13 @@ Guidelines:
       const responseText = result.response.text();
       
       try {
-        const jsonResponse = JSON.parse(responseText);
+        let sanitized = responseText;
+        const firstBrace = responseText.indexOf('{');
+        const lastBrace = responseText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
+          sanitized = responseText.substring(firstBrace, lastBrace + 1);
+        }
+        const jsonResponse = JSON.parse(sanitized);
         ctx.body = jsonResponse;
       } catch (parseError) {
         console.error('Failed to parse AI response as JSON:', responseText);
@@ -173,8 +155,18 @@ Guidelines:
     } catch (error: any) {
       console.error('Error calling Gemini API:', error);
       ctx.status = error.status || 500;
+      
+      let errorMessage = error.message || 'An unknown error occurred';
+      if (error.status === 503) {
+        errorMessage = 'The AI service is currently overloaded or unavailable (503). Please try again in a few moments.';
+      } else if (error.status === 429) {
+        errorMessage = 'You have exceeded the rate limit for the AI service (429). Please wait a bit before trying again.';
+      } else if (error.status === 403) {
+        errorMessage = 'Access denied (403). Please check if your Gemini API key is valid.';
+      }
+
       ctx.body = { 
-        error: 'Failed to process AI request',
+        error: errorMessage,
         details: error.message,
         suggestion: error.message?.includes('unregistered callers') 
           ? 'Check if GEMINI_API_KEY is valid and correctly loaded in the server environment.' 

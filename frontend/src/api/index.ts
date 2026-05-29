@@ -144,9 +144,34 @@ export const aiApi = {
     }
 
     try {
+      const firstBrace = fullText.indexOf('{');
+      const lastBrace = fullText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
+        const jsonStr = fullText.substring(firstBrace, lastBrace + 1);
+        return JSON.parse(jsonStr);
+      }
       return JSON.parse(fullText);
     } catch (e) {
-      return { comment: fullText, content: null, questions: [] };
+      console.warn('Failed to parse full AI response, attempting partial extraction:', e);
+      
+      // Fallback: Manually extract fields using regex if JSON is truncated
+      const result: AIResponse = { comment: '', content: null, questions: [] };
+      
+      const commentMatch = fullText.match(/"comment":\s*"((?:[^"\\]|\\.)*)/);
+      if (commentMatch) {
+        result.comment = commentMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      } else {
+        // If no comment field found, just use the raw text minus code blocks
+        result.comment = fullText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      }
+
+      const contentMatch = fullText.match(/"content":\s*"((?:[^"\\]|\\.)*)/);
+      if (contentMatch) {
+        const extractedContent = contentMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        result.content = extractedContent || null;
+      }
+
+      return result;
     }
   }
 };

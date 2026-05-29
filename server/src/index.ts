@@ -5,6 +5,7 @@ import net from 'net';
 import fs from 'fs-extra';
 import { loadConfig } from './config.js';
 import { createApp } from './app.js';
+import open from 'open';
 
 interface NotedOptions {
   port: string;
@@ -86,7 +87,7 @@ program
       for (const p of possiblePaths) {
         if (fs.existsSync(p)) {
           const versionData = fs.readJsonSync(p);
-          buildNumber = versionData.build;
+          buildNumber = versionData.version || versionData.build || 'unknown';
           break;
         }
       }
@@ -94,14 +95,22 @@ program
       // Ignore
     }
 
-    httpServer.listen(config.port, () => {
+    httpServer.listen(config.port, async () => {
+      const localUrl = `http://localhost:${config.port}`;
       console.log(`\n🚀 noted is running! (Build: ${buildNumber})`);
       console.log(`----------------------------------`);
+      console.log(`URL:        ${localUrl}`);
       console.log(`Directory:  ${config.rootPath}`);
       console.log(`Port:       ${config.port}`);
       console.log(`Read-only:  ${config.readonly}`);
       console.log(`Config:     ${config.configPath}`);
       console.log(`----------------------------------\n`);
+      
+      try {
+        await open(localUrl);
+      } catch (err) {
+        console.warn(`Failed to automatically open browser: ${err}`);
+      }
     });
   });
 

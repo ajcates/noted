@@ -1,27 +1,28 @@
 {
   "name": "noted",
-  "version": "1.0.0",
-  "description": "A node.js based note editor th",
+  "version": "0.4.0",
+  "description": "A node.js based note editor that launches like live-server and has AI editing powers. Perfect for managing the notes in your project.",
   "main": "index.js",
   "workspaces": [
     "frontend",
     "server"
   ],
   "scripts": {
-    "increment-build": "node scripts/increment-build.js",
+    "increment-build": "node scripts/bump-version.js build",
     "build:frontend": "npm run build --workspace=frontend",
     "build:server": "npm run build --workspace=server",
     "build": "npm run increment-build && npm run build:server && npm run build:frontend",
     "install-global": "npm install && npm run build && cd server && npm install -g .",
     "lint": "npm run lint --workspaces --if-present",
-    "test": "npm run test --workspaces"
+    "test": "npm run test --workspaces",
+    "it": "npm run install-global && noted notes"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ajcates/noted.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "@ajcates",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {

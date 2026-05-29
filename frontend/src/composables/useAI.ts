@@ -103,9 +103,14 @@ export function useAI(props: { selectedText: string, fullContent: string }) {
       };
       
       return response;
-    } catch (error) {
+    } catch (error: any) {
       console.error('AI error:', error);
-      chatLog.value.push({ role: 'model', content: 'Sorry, I encountered an error processing your request.' });
+      const errorMsg = error.message || 'Sorry, I encountered an error processing your request.';
+      if (modelMsgIndex !== undefined && chatLog.value[modelMsgIndex]) {
+        chatLog.value[modelMsgIndex].content = errorMsg;
+      } else {
+        chatLog.value.push({ role: 'model', content: errorMsg });
+      }
       throw error;
     } finally {
       isProcessing.value = false;

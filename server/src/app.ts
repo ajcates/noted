@@ -78,6 +78,7 @@ export function createApp(config: AppConfig) {
         error: {
           message: err.message || 'Internal Server Error',
           status: ctx.status,
+          code: err.code || 'UNKNOWN_ERROR',
         },
       };
       app.emit('error', err, ctx);
