@@ -21,7 +21,7 @@ program
   .description('A Node.js based note editor with PWA support')
   .version('1.0.0')
   .argument('[path]', 'path to the notes directory', '.')
-  .option('-p, --port <number>', 'port to use', '6767')
+  .option('-p, --port <number>', 'port to use (default: dynamic magic port unique to notes directory)')
   .option('-c, --config <path>', 'path to config file', 'config.env')
   .option('-r, --readonly', 'run in read-only mode')
   .option('--no-increment-port', 'do not automatically increment port if in use')

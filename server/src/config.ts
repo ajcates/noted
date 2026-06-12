@@ -53,10 +53,26 @@ export async function loadConfig(cliOptions: any, rootDir: string): Promise<AppC
     ? cliOptions.incrementPort 
     : (process.env.INCREMENT_PORT === 'true' || DEFAULT_CONFIG.incrementPort);
 
-  // Priority: CLI > ENV > DEFAULTS
+  const absoluteRootPath = path.resolve(process.cwd(), rootDir);
+
+  // DJB2 string hashing helper to generate a consistent port in [1024, 49151]
+  const getMagicPort = (dirPath: string): number => {
+    let hash = 5381;
+    for (let i = 0; i < dirPath.length; i++) {
+      hash = (hash * 33) ^ dirPath.charCodeAt(i);
+    }
+    hash = hash >>> 0;
+    return 1024 + (hash % 48128); // 49151 - 1024 + 1 = 48128
+  };
+
+  const magicPort = getMagicPort(absoluteRootPath);
+  const portString = cliOptions.port || process.env.PORT;
+  const port = portString ? parseInt(portString, 10) : magicPort;
+
+  // Priority: CLI > ENV > MAGIC_PORT
   const config: AppConfig = {
-    rootPath: path.resolve(process.cwd(), rootDir),
-    port: parseInt(cliOptions.port || process.env.PORT || DEFAULT_CONFIG.port!.toString(), 10),
+    rootPath: absoluteRootPath,
+    port: port,
     configPath: configPath,
     readonly: !!readonly,
     incrementPort: !!incrementPort,

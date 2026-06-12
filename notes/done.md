@@ -28,3 +28,4 @@
 - Updated **AI Presets and Multiple-Choice Options** to autofill or toggle/append their values in the chat prompt box instead of executing actions immediately.
 - Refined the layout to support a desktop split view (presets/chat log side-by-side) and a mobile vertical layout with horizontal scrolling presets.
 - Handled **Swipe Up to Close** touch gestures on the AI Assistant top-down panel.
+- Implemented **Magic Port numbers** generated consistently for note directories (between 1024 and 49151) via path hashing, making PWA offline storage more reliable.
