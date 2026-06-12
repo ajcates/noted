@@ -23,3 +23,8 @@
 - Added **Tooltips** and consolidated slots to the editor's bottom toolbar.
 - Made **Port Incrementing** the default behavior and added `--no-increment-port` to disable it.
 - Implemented **Markdown Preview** in the editor toolbar using the `marked` library, with support for `==highlight==` syntax.
+- Redesigned the **AI Assistant** interface to slide down as a top-panel overlay, keeping the note editor content visible and editable.
+- Implemented **Auto-Applied AI Suggestions** in the text editor accompanied by an "Approve Edit? Yes/No" confirmation snackbar.
+- Updated **AI Presets and Multiple-Choice Options** to autofill or toggle/append their values in the chat prompt box instead of executing actions immediately.
+- Refined the layout to support a desktop split view (presets/chat log side-by-side) and a mobile vertical layout with horizontal scrolling presets.
+- Handled **Swipe Up to Close** touch gestures on the AI Assistant top-down panel.

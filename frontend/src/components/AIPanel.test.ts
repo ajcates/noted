@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import AIPanel from './AIPanel.vue';
 import { aiApi } from '@/api';
 import { createPinia, setActivePinia } from 'pinia';
@@ -23,7 +23,16 @@ vi.mock('@/api', () => ({
 
 vi.mock('@/utils/db', () => ({
   db: {
-    files: { get: vi.fn() }
+    files: { get: vi.fn() },
+    aiHistory: {
+      where: vi.fn().mockReturnValue({
+        equals: vi.fn().mockReturnValue({
+          sortBy: vi.fn().mockResolvedValue([]),
+          delete: vi.fn().mockResolvedValue(1)
+        })
+      }),
+      add: vi.fn().mockResolvedValue(1)
+    }
   }
 }));
 
@@ -46,7 +55,8 @@ describe('AIPanel.vue', () => {
   const defaultProps = {
     open: true,
     selectedText: 'Selected text',
-    fullContent: 'Full content of the note'
+    fullContent: 'Full content of the note',
+    filePath: 'test-file.md'
   };
 
   it('renders correctly when open', () => {
@@ -55,20 +65,27 @@ describe('AIPanel.vue', () => {
     expect(wrapper.text()).toContain('AI Assistant');
   });
 
-  it('calls AI API when a preset is clicked', async () => {
+  it('calls AI API when a preset is clicked and submitted', async () => {
     const wrapper = mount(AIPanel, { props: defaultProps });
     const restructureBtn = wrapper.findAll('mdui-button').find(b => b.text() === 'Restructure');
     
     await restructureBtn?.trigger('click');
     
+    // Verify it filled the prompt box
+    expect(wrapper.vm.userInput).toBe('Restructure');
+    
+    // Trigger chat submit
+    await wrapper.find('mdui-button-icon[slot="end-icon"]').trigger('click');
+    
     expect(aiApi.streamProcess).toHaveBeenCalledWith(
-      'restructure',
+      'chat',
       'Full content of the note',
-      'Selected text',
+      'Restructure',
       expect.any(Array),
+      expect.any(Function), // onChunk
       expect.any(Array), // fileList
       expect.any(String), // customInstructions
-      expect.any(Function) // onChunk
+      expect.any(Object) // signal
     );
   });
 
@@ -77,8 +94,9 @@ describe('AIPanel.vue', () => {
     const restructureBtn = wrapper.findAll('mdui-button').find(b => b.text() === 'Restructure');
     
     await restructureBtn?.trigger('click');
-    await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick(); // Wait for promise and state update
+    await wrapper.find('mdui-button-icon[slot="end-icon"]').trigger('click');
+    
+    await flushPromises();
 
     expect(wrapper.text()).toContain('Mocked AI response');
     expect(wrapper.text()).toContain('Continue?');
@@ -86,19 +104,17 @@ describe('AIPanel.vue', () => {
     expect(wrapper.text()).toContain('No');
   });
 
-  it('emits apply event when Apply Changes is clicked', async () => {
+  it('emits apply event automatically when suggestion is received', async () => {
     const wrapper = mount(AIPanel, { props: defaultProps });
     const restructureBtn = wrapper.findAll('mdui-button').find(b => b.text() === 'Restructure');
     
     await restructureBtn?.trigger('click');
-    await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
-
-    const applyBtn = wrapper.find('mdui-button[variant="filled"]');
-    await applyBtn.trigger('click');
+    await wrapper.find('mdui-button-icon[slot="end-icon"]').trigger('click');
+    
+    await flushPromises();
 
     expect(wrapper.emitted('apply')).toBeTruthy();
-    expect(wrapper.emitted('apply')?.[0]).toEqual([{ content: 'Updated content', promptId: 'restructure' }]);
+    expect(wrapper.emitted('apply')?.[0]).toEqual([{ content: 'Updated content', promptId: 'chat' }]);
   });
 
   it('injects context from @filename references', async () => {
@@ -124,9 +140,10 @@ describe('AIPanel.vue', () => {
           })]
         })
       ]),
+      expect.any(Function),
       expect.any(Array),
       expect.any(String),
-      expect.any(Function)
+      expect.any(Object)
     );
   });
 });

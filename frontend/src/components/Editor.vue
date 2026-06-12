@@ -9,6 +9,7 @@ import { aiApi } from '@/api';
 import AIPanel from './AIPanel.vue';
 import { useEditor } from '@/composables/useEditor';
 import { useSearch } from '@/composables/useSearch';
+import HighlightOverlay from './HighlightOverlay.vue';
 
 import '@mdui/icons/auto-awesome.js';
 import '@mdui/icons/close.js';
@@ -43,7 +44,15 @@ const formatTime = (ts: number) => {
 // Local state for the textarea
 const localContent = ref(fileStore.currentContent);
 const aiPanelOpen = ref(false);
+const originalContent = ref('');
+const suggestionSnackbarOpen = ref(false);
+const pendingSuggestion = ref('');
 const previewMode = ref(false);
+const scrollPos = ref(0);
+
+const handleScroll = (e: Event) => {
+  scrollPos.value = (e.target as HTMLTextAreaElement).scrollTop;
+};
 
 // Composables
 const {
@@ -88,9 +97,34 @@ const renderedHtml = computed(() => {
   return marked.parse(content);
 });
 
-const handleAIApply = ({ content }: { content: string }) => {
+const handleSuggestionReceived = (content: string) => {
+  if (!suggestionSnackbarOpen.value) {
+    originalContent.value = localContent.value;
+  }
+  pendingSuggestion.value = content;
   localContent.value = content;
+  suggestionSnackbarOpen.value = true;
+};
+
+const approveSuggestion = () => {
+  suggestionSnackbarOpen.value = false;
+  originalContent.value = '';
+  pendingSuggestion.value = '';
   textareaRef.value?.focus();
+};
+
+const rejectSuggestion = () => {
+  suggestionSnackbarOpen.value = false;
+  if (originalContent.value !== '') {
+    localContent.value = originalContent.value;
+  }
+  originalContent.value = '';
+  pendingSuggestion.value = '';
+  textareaRef.value?.focus();
+};
+
+const handleAIApply = ({ content }: { content: string }) => {
+  handleSuggestionReceived(content);
 };
 
 // Sync local content when store changes (e.g. file opened or websocket update)
@@ -106,10 +140,33 @@ watch(localContent, (newContent) => {
     debouncedSave(newContent);
   }
 });
+
+onMounted(() => {
+  textareaRef.value?.focus();
+  
+  // Configure marked to include copy buttons in code blocks
+  marked.use({
+    renderer: {
+      code(token) {
+        const lang = token.lang || '';
+        const text = token.text;
+        return `
+          <div class="code-block-wrapper">
+            <div class="code-block-header">
+              <span class="code-block-lang">${lang}</span>
+              <button class="copy-button" onclick="navigator.clipboard.writeText(this.parentElement.nextElementSibling.querySelector('code').innerText).then(() => { const btn = this; const oldText = btn.innerText; btn.innerText = 'Copied!'; btn.classList.add('copied'); setTimeout(() => { btn.innerText = oldText; btn.classList.remove('copied'); }, 2000); })">Copy</button>
+            </div>
+            <pre><code class="language-${lang}">${text}</code></pre>
+          </div>
+        `;
+      }
+    }
+  });
+});
 </script>
 
 <template>
-  <div class="editor-wrapper">
+  <div class="editor-wrapper" :class="{ 'ai-open': aiPanelOpen }">
     <!-- Search Bar -->
     <div v-if="searchOpen" class="search-bar">
       <div class="search-inputs">
@@ -163,28 +220,43 @@ watch(localContent, (newContent) => {
     </mdui-dialog>
 
     <div v-if="previewMode" class="preview-container" v-html="renderedHtml"></div>
-    <textarea
-      v-else
-      ref="textareaRef"
-      v-model="localContent"
-      :readonly="fileStore.readonly"
-      class="native-textarea"
-      placeholder="Start typing..."
-      spellcheck="false"
-      @keyup="updateSelection"
-      @click="updateSelection"
-      @select="updateSelection"
-    ></textarea>
+    <div v-else class="native-editor-container">
+      <HighlightOverlay :text="localContent" :style="{ top: `-${scrollPos}px` }" />
+      <textarea
+        ref="textareaRef"
+        v-model="localContent"
+        :readonly="fileStore.readonly"
+        class="native-textarea"
+        placeholder="Start typing..."
+        spellcheck="false"
+        @keyup="updateSelection"
+        @click="updateSelection"
+        @select="updateSelection"
+        @scroll="handleScroll"
+      ></textarea>
+    </div>
     
     <Teleport to="body">
-      <AIPanel 
-        :open="aiPanelOpen" 
+      <AIPanel
+        :open="aiPanelOpen"
         :selected-text="localContent.substring(selectionStart, selectionEnd)"
         :full-content="localContent"
+        :file-path="fileStore.currentFile?.path || 'global'"
         @close="aiPanelOpen = false"
         @apply="handleAIApply"
       />
     </Teleport>
+
+    <mdui-snackbar
+      :open="suggestionSnackbarOpen"
+      :auto-close-delay="0"
+      :close-on-outside-click="false"
+      @closed="suggestionSnackbarOpen = false"
+    >
+      Approve Edit?
+      <mdui-button slot="action" variant="text" style="color: #CDDC39;" @click="approveSuggestion">Yes</mdui-button>
+      <mdui-button slot="action" variant="text" style="color: #f44336;" @click="rejectSuggestion">No</mdui-button>
+    </mdui-snackbar>
 
     <BottomBar
       :is-highlighted="isHighlighted"
@@ -276,7 +348,15 @@ watch(localContent, (newContent) => {
   display: flex;
   flex-direction: column;
   position: relative;
-  transition: padding 0.3s;
+  transition: padding-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.editor-wrapper.ai-open {
+  padding-top: 380px;
+}
+@media (max-width: 767px) {
+  .editor-wrapper.ai-open {
+    padding-top: 400px;
+  }
 }
 .preview-container {
   flex-grow: 1;
@@ -318,6 +398,54 @@ watch(localContent, (newContent) => {
   border-radius: 8px;
   overflow-x: auto;
   margin-bottom: 1em;
+}
+
+.preview-container :deep(.code-block-wrapper) {
+  position: relative;
+  margin-bottom: 1em;
+}
+
+.preview-container :deep(.code-block-header) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 4px 12px;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.preview-container :deep(.copy-button) {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #CDDC39;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.2s;
+  text-transform: none;
+}
+
+.preview-container :deep(.copy-button:hover) {
+  background-color: rgba(205, 220, 57, 0.1);
+  border-color: #CDDC39;
+}
+
+.preview-container :deep(.copy-button.copied) {
+  background-color: #CDDC39;
+  color: black;
+  border-color: #CDDC39;
+}
+
+.preview-container :deep(.code-block-wrapper pre) {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 .preview-container :deep(blockquote) {
   border-left: 4px solid #CDDC39;
@@ -407,10 +535,22 @@ watch(localContent, (newContent) => {
   padding: 12px;
   font-family: 'Fira Code', 'Cascadia Code', 'Source Code Pro', monospace;
   font-size: 14px;
-  background-color: rgb(var(--mdui-color-surface-container));
-  color: rgb(var(--mdui-color-on-surface));
+  background-color: transparent;
+  color: transparent;
+  caret-color: #CDDC39;
   outline: none;
   line-height: 1.5;
   box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: block;
+}
+
+.native-editor-container {
+  flex-grow: 1;
+  position: relative;
+  overflow: hidden;
+  background-color: rgb(var(--mdui-color-surface-container));
 }
 </style>
