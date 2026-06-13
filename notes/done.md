@@ -36,3 +36,4 @@
 - Refined the **Search Bar** in the editor to open with an **expressive bouncy slide-down transition** and automatically focus its text input.
 - Hidden the **File Browser search bar by default**, adding a "Find" toggle button in the top app bar that automatically reveals and focuses it.
 - Moved the Search (Search & Replace) button from the bottom toolbar back to the top app bar actions (`#top-bar-actions`) and updated the unit tests.
+- Re-routed the AI Panel to slide up from the bottom of the editor instead of sliding down from the top, updated swipe gestures (swipe down to close), and configured global dark mode styling for the snackbars.

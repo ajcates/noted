@@ -120,15 +120,15 @@ const formatTime = (ts: number) => {
   return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
-// Swipe UP to close logic
+// Swipe DOWN to close logic
 let touchStartY = 0;
 const onTouchStart = (e: TouchEvent) => {
   touchStartY = e.changedTouches[0].screenY;
 };
 const onTouchEnd = (e: TouchEvent) => {
   const touchEndY = e.changedTouches[0].screenY;
-  // Swipe up (threshold 80px)
-  if (touchStartY - touchEndY > 80) {
+  // Swipe down (threshold 80px)
+  if (touchEndY - touchStartY > 80) {
     emit('close');
   }
 };
@@ -284,7 +284,7 @@ const onTouchEnd = (e: TouchEvent) => {
 <style scoped>
 .ai-panel {
   position: fixed;
-  top: -380px;
+  bottom: -380px;
   left: 0;
   right: 0;
   height: 380px;
@@ -293,12 +293,12 @@ const onTouchEnd = (e: TouchEvent) => {
   z-index: 999;
   display: flex;
   flex-direction: column;
-  transition: top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .ai-panel.open {
-  top: 56px;
+  bottom: 56px;
 }
 
 .panel-header {
@@ -530,11 +530,13 @@ const onTouchEnd = (e: TouchEvent) => {
 @media (max-width: 767px) {
   .ai-panel {
     height: 400px;
-    top: -400px;
+    bottom: -400px;
+    top: auto;
   }
   
   .ai-panel.open {
-    top: 56px;
+    bottom: 56px;
+    top: auto;
   }
   
   .panel-body {

@@ -330,14 +330,14 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   position: relative;
-  transition: padding-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: padding-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .editor-wrapper.ai-open {
-  padding-top: 380px;
+  padding-bottom: 380px;
 }
 @media (max-width: 767px) {
   .editor-wrapper.ai-open {
-    padding-top: 400px;
+    padding-bottom: 400px;
   }
 }
 .preview-container {

@@ -26,6 +26,10 @@ style.textContent = `
     margin: 0;
     font-family: Roboto, sans-serif;
   }
+  mdui-snackbar {
+    --mdui-color-inverse-surface: 30, 30, 30;
+    --mdui-color-inverse-on-surface: 240, 240, 240;
+  }
 `
 document.head.appendChild(style)
 
