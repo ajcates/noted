@@ -29,3 +29,9 @@
 - Refined the layout to support a desktop split view (presets/chat log side-by-side) and a mobile vertical layout with horizontal scrolling presets.
 - Handled **Swipe Up to Close** touch gestures on the AI Assistant top-down panel.
 - Implemented **Magic Port numbers** generated consistently for note directories (between 1024 and 49151) via path hashing, making PWA offline storage more reliable.
+- Repositioned the **Undo button** to be visible by itself on the far left of the bottom toolbar, grouping the other text-editing options (Text Actions, Preview, History, Search) to the far right.
+- Moved the **History and Preview buttons** from the top app bar actions down into the bottom toolbar.
+- Removed the old **FAB run and robot AI prompt buttons** from the bottom toolbar.
+- Moved the **Search (Search & Replace) button** to the rightmost position of the bottom toolbar.
+- Refined the **Search Bar** in the editor to open with an **expressive bouncy slide-down transition** and automatically focus its text input.
+- Hidden the **File Browser search bar by default**, adding a "Find" toggle button in the top app bar that automatically reveals and focuses it.

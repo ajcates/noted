@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, nextTick, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFileStore } from '@/stores/fileStore';
 import debounce from 'lodash/debounce';
@@ -16,6 +16,8 @@ import '@mdui/icons/delete.js';
 import '@mdui/icons/sort.js';
 import '@mdui/icons/arrow-upward.js';
 import '@mdui/icons/arrow-downward.js';
+import '@mdui/icons/search.js';
+import '@mdui/icons/close.js';
 
 const fileStore = useFileStore();
 const { sortedFiles } = storeToRefs(fileStore);
@@ -94,6 +96,19 @@ const undoDelete = () => {
 };
 
 const searchQuery = ref('');
+const searchVisible = ref(false);
+const searchInputRef = ref<any>(null);
+
+watch(searchVisible, (visible) => {
+  if (!visible) {
+    searchQuery.value = '';
+    fileStore.searchResults = [];
+  } else {
+    nextTick(() => {
+      searchInputRef.value?.focus();
+    });
+  }
+});
 
 const onSearchInput = debounce((query: string) => {
   fileStore.searchFiles(query);
@@ -112,9 +127,21 @@ const isFabOpen = ref(false);
   <div class="file-browser">
     <mdui-linear-progress v-if="fileStore.loading || fileStore.isSearching"></mdui-linear-progress>
     
+    <Teleport to="#top-bar-actions">
+      <mdui-button-icon 
+        @click="searchVisible = !searchVisible"
+        tooltip="Find"
+        style="color: #CDDC39; --mdui-button-icon-size: 40px;"
+      >
+        <mdui-icon-search v-if="!searchVisible"></mdui-icon-search>
+        <mdui-icon-close v-else></mdui-icon-close>
+      </mdui-button-icon>
+    </Teleport>
+
     <!-- Global Search -->
-    <div class="search-section">
+    <div v-if="searchVisible" class="search-section">
       <mdui-text-field
+        ref="searchInputRef"
         v-model="searchQuery"
         placeholder="Search all notes..."
         variant="outlined"

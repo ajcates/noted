@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, computed } from 'vue';
+import { ref, watch, onMounted, computed, nextTick } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
 import debounce from 'lodash/debounce';
 import { marked } from 'marked';
@@ -82,6 +82,14 @@ const {
   performReplace,
   replaceAll
 } = useSearch(localContent, textareaRef);
+
+const searchInputRef = ref<any>(null);
+watch(searchOpen, async (open) => {
+  if (open) {
+    await nextTick();
+    searchInputRef.value?.focus();
+  }
+});
 
 // Computed for metrics
 const wordCount = computed(() => countWords(localContent.value));
@@ -168,44 +176,47 @@ onMounted(() => {
 <template>
   <div class="editor-wrapper" :class="{ 'ai-open': aiPanelOpen }">
     <!-- Search Bar -->
-    <div v-if="searchOpen" class="search-bar">
-      <div class="search-inputs">
-        <mdui-text-field
-          v-model="searchQuery"
-          placeholder="Search"
-          variant="filled"
-          class="dense-field"
-          @input="performSearch"
-        >
-          <mdui-button-icon slot="icon" @click="prevSearchResult" :disabled="searchResults.length === 0">
-            <mdui-icon-keyboard-arrow-up></mdui-icon-keyboard-arrow-up>
+    <Transition name="search-slide">
+      <div v-if="searchOpen" class="search-bar">
+        <div class="search-inputs">
+          <mdui-text-field
+            ref="searchInputRef"
+            v-model="searchQuery"
+            placeholder="Search"
+            variant="filled"
+            class="dense-field"
+            @input="performSearch"
+          >
+            <mdui-button-icon slot="icon" @click="prevSearchResult" :disabled="searchResults.length === 0">
+              <mdui-icon-keyboard-arrow-up></mdui-icon-keyboard-arrow-up>
+            </mdui-button-icon>
+            <mdui-button-icon slot="end-icon" @click="nextSearchResult" :disabled="searchResults.length === 0">
+              <mdui-icon-keyboard-arrow-down></mdui-icon-keyboard-arrow-down>
+            </mdui-button-icon>
+          </mdui-text-field>
+          
+          <mdui-text-field
+            v-model="replaceQuery"
+            placeholder="Replace"
+            variant="filled"
+            class="dense-field"
+          >
+            <mdui-button-icon slot="icon" @click="performReplace" :disabled="searchResults.length === 0">
+              <mdui-icon-find-replace></mdui-icon-find-replace>
+            </mdui-button-icon>
+          </mdui-text-field>
+        </div>
+        <div class="search-actions">
+          <span class="results-count" v-if="searchQuery">
+            {{ searchResults.length > 0 ? currentResultIndex + 1 : 0 }}/{{ searchResults.length }}
+          </span>
+          <mdui-button variant="text" @click="replaceAll" :disabled="searchResults.length === 0" style="color: #CDDC39;">All</mdui-button>
+          <mdui-button-icon @click="toggleSearch">
+            <mdui-icon-close></mdui-icon-close>
           </mdui-button-icon>
-          <mdui-button-icon slot="end-icon" @click="nextSearchResult" :disabled="searchResults.length === 0">
-            <mdui-icon-keyboard-arrow-down></mdui-icon-keyboard-arrow-down>
-          </mdui-button-icon>
-        </mdui-text-field>
-        
-        <mdui-text-field
-          v-model="replaceQuery"
-          placeholder="Replace"
-          variant="filled"
-          class="dense-field"
-        >
-          <mdui-button-icon slot="icon" @click="performReplace" :disabled="searchResults.length === 0">
-            <mdui-icon-find-replace></mdui-icon-find-replace>
-          </mdui-button-icon>
-        </mdui-text-field>
+        </div>
       </div>
-      <div class="search-actions">
-        <span class="results-count" v-if="searchQuery">
-          {{ searchResults.length > 0 ? currentResultIndex + 1 : 0 }}/{{ searchResults.length }}
-        </span>
-        <mdui-button variant="text" @click="replaceAll" :disabled="searchResults.length === 0" style="color: #CDDC39;">All</mdui-button>
-        <mdui-button-icon @click="toggleSearch">
-          <mdui-icon-close></mdui-icon-close>
-        </mdui-button-icon>
-      </div>
-    </div>
+    </Transition>
 
     <!-- History Dialog -->
     <mdui-dialog :open="historyOpen" @overlay-click="historyOpen = false" headline="Version History">
@@ -261,7 +272,6 @@ onMounted(() => {
     <BottomBar
       :is-highlighted="isHighlighted"
       :can-undo="true"
-      :is-processing="false"
       :word-count="wordCount"
       :reading-time="readingTime"
       @highlight="handleHighlight"
@@ -271,54 +281,13 @@ onMounted(() => {
       @list="handleList"
       @link="handleLink"
       @escape="handleEscape"
-      @select-prompt="(id: string) => aiPanelOpen = true"
-      @run-prompt="() => aiPanelOpen = true"
+      @preview="previewMode = true"
+      @history="openHistory"
+      @search="toggleSearch"
     />
 
     <Teleport v-if="!previewMode" to="#top-bar-actions">
       <div class="editor-top-actions">
-        <!-- Preview Mode -->
-        <mdui-button-icon 
-          @click="previewMode = true"
-          tooltip="Preview"
-          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-          tabindex="-1"
-          @pointerdown.prevent
-          @mousedown.prevent
-        >
-          <mdui-icon-visibility></mdui-icon-visibility>
-        </mdui-button-icon>
-
-        <div class="top-divider"></div>
-
-        <!-- Version History -->
-        <mdui-button-icon 
-          @click="openHistory"
-          tooltip="History"
-          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-          tabindex="-1"
-          @pointerdown.prevent
-          @mousedown.prevent
-        >
-          <mdui-icon-history></mdui-icon-history>
-        </mdui-button-icon>
-
-        <div class="top-divider"></div>
-
-        <!-- Search -->
-        <mdui-button-icon 
-          @click="toggleSearch"
-          tooltip="Search & Replace"
-          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-          tabindex="-1"
-          @pointerdown.prevent
-          @mousedown.prevent
-        >
-          <mdui-icon-search></mdui-icon-search>
-        </mdui-button-icon>
-
-        <div class="top-divider"></div>
-
         <!-- AI Assistant Toggle -->
         <mdui-button-icon 
           @click="aiPanelOpen = !aiPanelOpen"
@@ -552,5 +521,16 @@ onMounted(() => {
   position: relative;
   overflow: hidden;
   background-color: rgb(var(--mdui-color-surface-container));
+}
+
+/* Search Bar entry transition */
+.search-slide-enter-active,
+.search-slide-leave-active {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+}
+.search-slide-enter-from,
+.search-slide-leave-to {
+  transform: translateY(-20px);
+  opacity: 0;
 }
 </style>

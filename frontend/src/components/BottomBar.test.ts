@@ -3,16 +3,15 @@ import { mount } from '@vue/test-utils';
 import BottomBar from './BottomBar.vue';
 
 describe('BottomBar.vue', () => {
+  const defaultProps = {
+    isHighlighted: false,
+    canUndo: true,
+    wordCount: 120,
+    readingTime: 1
+  };
+
   it('emits highlight event when highlight item is clicked', async () => {
-    const wrapper = mount(BottomBar, {
-      props: {
-        isHighlighted: false,
-        canUndo: true,
-        isProcessing: false,
-        wordCount: 0,
-        readingTime: 0
-      }
-    });
+    const wrapper = mount(BottomBar, { props: defaultProps });
 
     const menuItems = wrapper.findAll('mdui-menu-item');
     const highlightItem = menuItems.find(i => i.text().includes('Highlight'));
@@ -21,34 +20,47 @@ describe('BottomBar.vue', () => {
     expect(wrapper.emitted()).toHaveProperty('highlight');
   });
 
-  it('emits run-prompt event when FAB is clicked', async () => {
-    const wrapper = mount(BottomBar, {
-      props: {
-        isHighlighted: false,
-        canUndo: true,
-        isProcessing: false,
-        wordCount: 0,
-        readingTime: 0
-      }
-    });
+  it('emits undo event when standalone Undo button is clicked', async () => {
+    const wrapper = mount(BottomBar, { props: defaultProps });
 
-    const fab = wrapper.find('mdui-fab');
-    await fab.trigger('click');
-    expect(wrapper.emitted()).toHaveProperty('run-prompt');
+    const undoBtn = wrapper.find('mdui-button-icon[tooltip="Undo"]');
+    await undoBtn.trigger('click');
+    expect(wrapper.emitted()).toHaveProperty('undo');
   });
 
-  it('disables undo item when canUndo is false', () => {
+  it('disables standalone Undo button when canUndo is false', () => {
     const wrapper = mount(BottomBar, {
       props: {
-        isHighlighted: false,
-        canUndo: false,
-        isProcessing: false,
-        wordCount: 0,
-        readingTime: 0
+        ...defaultProps,
+        canUndo: false
       }
     });
 
-    const undoItem = wrapper.findAll('mdui-menu-item').find(i => i.text().includes('Undo'));
-    expect(undoItem?.attributes('disabled')).toBe('true');
+    const undoBtn = wrapper.find('mdui-button-icon[tooltip="Undo"]');
+    expect(undoBtn.attributes('disabled')).toBe('true');
+  });
+
+  it('emits preview event when Preview button is clicked', async () => {
+    const wrapper = mount(BottomBar, { props: defaultProps });
+
+    const previewBtn = wrapper.find('mdui-button-icon[tooltip="Preview"]');
+    await previewBtn.trigger('click');
+    expect(wrapper.emitted()).toHaveProperty('preview');
+  });
+
+  it('emits history event when History button is clicked', async () => {
+    const wrapper = mount(BottomBar, { props: defaultProps });
+
+    const historyBtn = wrapper.find('mdui-button-icon[tooltip="History"]');
+    await historyBtn.trigger('click');
+    expect(wrapper.emitted()).toHaveProperty('history');
+  });
+
+  it('emits search event when Search button is clicked', async () => {
+    const wrapper = mount(BottomBar, { props: defaultProps });
+
+    const searchBtn = wrapper.find('mdui-button-icon[tooltip="Search & Replace"]');
+    await searchBtn.trigger('click');
+    expect(wrapper.emitted()).toHaveProperty('search');
   });
 });

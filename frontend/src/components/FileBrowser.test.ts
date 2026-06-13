@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import FileBrowser from './FileBrowser.vue';
 import { createPinia, setActivePinia } from 'pinia';
@@ -25,9 +25,16 @@ vi.mock('@/utils/db', () => ({
 }));
 
 describe('FileBrowser.vue', () => {
+  let teleportTarget: HTMLDivElement;
+
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+
+    // Create Teleport target
+    teleportTarget = document.createElement('div');
+    teleportTarget.id = 'top-bar-actions';
+    document.body.appendChild(teleportTarget);
     
     // Mock localStorage
     const storage: Record<string, string> = {};
@@ -42,6 +49,10 @@ describe('FileBrowser.vue', () => {
       configurable: true,
       value: true,
     });
+  });
+
+  afterEach(() => {
+    document.body.removeChild(teleportTarget);
   });
 
   it('renders files from the store', async () => {
@@ -89,7 +100,13 @@ describe('FileBrowser.vue', () => {
     (filesApi.search as any).mockResolvedValue(mockResults);
 
     const wrapper = mount(FileBrowser);
-    const searchInput = wrapper.find('mdui-text-field');
+    
+    // Click find button to reveal search input
+    const findBtn = document.body.querySelector('mdui-button-icon[tooltip="Find"]');
+    (findBtn as any)?.click();
+    await wrapper.vm.$nextTick();
+    
+    const searchInput = wrapper.find('.search-input');
     
     (searchInput.element as any).value = 'query';
     searchInput.element.dispatchEvent(new Event('input'));
