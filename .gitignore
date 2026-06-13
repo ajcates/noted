@@ -4,3 +4,4 @@ dist
 frontend/dist
 server/dist
 .DS_Store
+playwright-termux/

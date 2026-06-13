@@ -6,8 +6,30 @@ import { useFileStore } from '@/stores/fileStore';
 
 // Mock the API
 vi.mock('@/api', () => ({
-  aiApi: { process: vi.fn() },
+  aiApi: { process: vi.fn(), streamProcess: vi.fn() },
   filesApi: { read: vi.fn(), write: vi.fn() }
+}));
+
+vi.mock('@/utils/db', () => ({
+  db: {
+    files: { get: vi.fn().mockResolvedValue(null) },
+    versions: { 
+      where: vi.fn().mockReturnValue({
+        equals: vi.fn().mockReturnValue({
+          sortBy: vi.fn().mockResolvedValue([])
+        })
+      }),
+      add: vi.fn().mockResolvedValue(1)
+    },
+    aiHistory: {
+      where: vi.fn().mockReturnValue({
+        equals: vi.fn().mockReturnValue({
+          sortBy: vi.fn().mockResolvedValue([])
+        })
+      }),
+      add: vi.fn().mockResolvedValue(1)
+    }
+  }
 }));
 
 describe('Editor.vue', () => {

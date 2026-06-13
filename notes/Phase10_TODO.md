@@ -27,6 +27,6 @@
 
 ## Stage 5: Advanced AI Assistants
 - [ ] Implement **Inline AI Ghostwriting**:
-  - [ ] "Press Tab to complete" logic using Gemini 1.5 Flash.
+  - [ ] "Press Tab to complete" logic using Gemini 3.5 Flash.
   - [ ] Inline context-aware suggestions.
 - [ ] Add **Multi-modal Support** (Optional): Ability to process image descriptions if images are referenced.

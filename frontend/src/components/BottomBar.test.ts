@@ -55,12 +55,5 @@ describe('BottomBar.vue', () => {
     await historyBtn.trigger('click');
     expect(wrapper.emitted()).toHaveProperty('history');
   });
-
-  it('emits search event when Search button is clicked', async () => {
-    const wrapper = mount(BottomBar, { props: defaultProps });
-
-    const searchBtn = wrapper.find('mdui-button-icon[tooltip="Search & Replace"]');
-    await searchBtn.trigger('click');
-    expect(wrapper.emitted()).toHaveProperty('search');
-  });
 });
+

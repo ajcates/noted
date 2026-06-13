@@ -4,7 +4,7 @@
 - [ ] Implement **Full-Text Search (FTS)** using Dexie.js hooks or `FlexSearch`.
   - [ ] Index file contents stored in the local cache.
   - [ ] Add a search bar to `FileBrowser.vue`.
-  - [ ] Display search results with snippets of matching content.
+  - [ ] Display search results   with snippets of matching content.
 - [ ] Implement **Filename Filtering**: Instant real-time filtering of the current directory view.
 
 ## Stage 2: Multi-Level Settings System

@@ -95,9 +95,10 @@ export const aiApi = {
     fullContent: string, 
     selection: string | undefined, 
     history: any[], 
-    fileList: string[], 
-    customInstructions: string | undefined,
-    onChunk: (text: string) => void
+    onChunk: (text: string) => void,
+    fileList?: string[],
+    customInstructions?: string,
+    signal?: AbortSignal
   ): Promise<AIResponse> {
     const token = localStorage.getItem('noted_token');
     const response = await fetch('/api/ai/process-stream', {
@@ -107,6 +108,7 @@ export const aiApi = {
         'Authorization': token ? `Bearer ${token}` : '',
       },
       body: JSON.stringify({ promptId, fullContent, selection, history, fileList, customInstructions }),
+      signal
     });
 
     if (!response.ok) {

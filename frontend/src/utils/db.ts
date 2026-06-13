@@ -26,17 +26,30 @@ export interface FileVersion {
   timestamp: number;
 }
 
+export interface AIChatMessage {
+  id?: number;
+  filePath: string;
+  role: 'user' | 'model';
+  content: string;
+  promptId?: string;
+  updatedContent?: string | null;
+  questions?: { question: string, options: string[] }[];
+  timestamp: number;
+}
+
 export class NotedDatabase extends Dexie {
   files!: Table<CachedFile>;
   pendingChanges!: Table<PendingChange>;
   versions!: Table<FileVersion>;
+  aiHistory!: Table<AIChatMessage>;
 
   constructor() {
     super('NotedDatabase');
-    this.version(2).stores({
+    this.version(3).stores({
       files: 'path',
       pendingChanges: '++id, path, type',
-      versions: '++id, path, timestamp'
+      versions: '++id, path, timestamp',
+      aiHistory: '++id, filePath, timestamp'
     });
   }
 }

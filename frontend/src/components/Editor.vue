@@ -283,11 +283,24 @@ onMounted(() => {
       @escape="handleEscape"
       @preview="previewMode = true"
       @history="openHistory"
-      @search="toggleSearch"
     />
 
     <Teleport v-if="!previewMode" to="#top-bar-actions">
       <div class="editor-top-actions">
+        <!-- Search -->
+        <mdui-button-icon 
+          @click="toggleSearch"
+          tooltip="Search & Replace"
+          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
+          tabindex="-1"
+          @pointerdown.prevent
+          @mousedown.prevent
+        >
+          <mdui-icon-search></mdui-icon-search>
+        </mdui-button-icon>
+
+        <div class="top-divider"></div>
+
         <!-- AI Assistant Toggle -->
         <mdui-button-icon 
           @click="aiPanelOpen = !aiPanelOpen"

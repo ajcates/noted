@@ -10,7 +10,6 @@ import '@mdui/icons/text-fields.js';
 import '@mdui/icons/data-object.js';
 import '@mdui/icons/visibility.js';
 import '@mdui/icons/history.js';
-import '@mdui/icons/search.js';
 
 const props = defineProps<{
   isHighlighted: boolean;
@@ -28,8 +27,7 @@ const emit = defineEmits([
   'link', 
   'escape',
   'preview',
-  'history',
-  'search'
+  'history'
 ]);
 </script>
 
@@ -123,18 +121,6 @@ const emit = defineEmits([
         @mousedown.prevent
       >
         <mdui-icon-history></mdui-icon-history>
-      </mdui-button-icon>
-
-      <!-- Search button (all the way to the right) -->
-      <mdui-button-icon
-        tooltip="Search & Replace"
-        style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-        tabindex="-1"
-        @click="emit('search')"
-        @pointerdown.prevent
-        @mousedown.prevent
-      >
-        <mdui-icon-search></mdui-icon-search>
       </mdui-button-icon>
     </div>
   </mdui-bottom-app-bar>

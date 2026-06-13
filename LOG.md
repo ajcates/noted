@@ -1155,3 +1155,217 @@
 
 ### 10. Error Check & Debug
 - **Final Validation:** AI endpoints successfully match against the refactored prompt dictionary without any breaking changes to the frontend contract.
+
+## Cycle #21 - 2026-05-29
+**Target State:** Stability & Code Block Polish
+
+### 1. Analyze & Audit
+- **Current State:** Linting failing in `frontend/src/composables/useAI.ts`. Code blocks in preview are static.
+- **Observations:** Scoping issue with `modelMsgIndex` in `useAI.ts`. User experience could be improved by adding a copy button to code blocks.
+- **Audit Findings:** Score 6/7. TS2304: Cannot find name 'modelMsgIndex'.
+
+### 2. Question
+- How to fix the scoping error in `useAI.ts`?
+- How to implement a non-intrusive "Copy" button for code blocks?
+
+### 3. Brainstorm
+- **State A (Stability):** Move `modelMsgIndex` outside the `try` block.
+- **State B (UX):** Use a custom `marked` renderer to inject a "Copy" button into code blocks.
+
+### 4. Evaluate (Pro/Con/Difficulty)
+- **State A (Stability):**
+  - Pros: Restores CI health.
+  - Cons: None.
+  - Impact: 10
+  - Difficulty: 1
+  - Priority: 10.0
+- **State B (UX):**
+  - Pros: Improves developer workflow.
+  - Cons: Requires custom renderer configuration.
+  - Impact: 7
+  - Difficulty: 3
+  - Priority: 2.33
+
+### 5. Check Compatibility
+- Compatible.
+
+### 6. Prioritize
+- **Selection:** Stability + UX Polish.
+
+### 7. Specify
+- **Spec Changes:** Update `useAI.ts` to properly scope indices. Update `Editor.vue` with custom renderer and CSS.
+- **TODO List:**
+  - [x] Fix `modelMsgIndex` scoping in `useAI.ts`.
+  - [x] Add type guards for `modelMsgIndex` usage.
+  - [x] Implement custom code block renderer in `Editor.vue`.
+  - [x] Add CSS styles for code block headers and copy buttons.
+
+### 8. Execute & Test
+- **Implementation Notes:** Moved `modelMsgIndex` to function top scope. Implemented `marked.use` in `onMounted` with an inline `onclick` handler for zero-dependency clipboard access.
+- **Tests Run:** `npm run test --workspaces` and `npm run lint`
+- **Result:** Success. 46 tests passing. Health 7/7.
+
+### 9. Refine & Document
+- **Bugs Fixed:** Fixed `modelMsgIndex` being undefined in catch block. Fixed TypeScript index errors.
+- **Docs Updated:** Yes (LOG.md).
+- **Commit Hash:** N/A
+
+### 10. Error Check & Debug
+- **Final Validation:** Verified that code blocks in preview now show a header with language name and a functional Copy button. Verified that linting passes globally.
+
+## Cycle #22 - 2026-05-29
+**Target State:** AI Chat Markdown Support
+
+### 1. Analyze & Audit
+- **Current State:** AI chat responses in `AIPanel.vue` are rendered as plain text.
+- **Observations:** Messages containing code blocks, lists, or formatting are hard to read.
+- **Audit Findings:** UX gap. No markdown rendering in chat. Health 7/7.
+
+### 2. Question
+- How can we provide rich formatting in the AI chat?
+- Can we reuse the `marked` configuration from the main editor?
+
+### 3. Brainstorm
+- **State A (Markdown):** Integrate `marked` into `AIPanel.vue` and use `v-html`.
+- **State B (Component):** Create a dedicated `MarkdownView` component.
+
+### 4. Evaluate (Pro/Con/Difficulty)
+- **State A (Markdown):**
+  - Pros: Quick to implement, reuses existing library, automatically inherits "Copy" buttons from Cycle #21.
+  - Cons: `v-html` needs careful styling.
+  - Impact: 9
+  - Difficulty: 2
+  - Priority: 4.5
+
+### 5. Check Compatibility
+- Compatible.
+
+### 6. Prioritize
+- **Selection:** State A (Markdown in AI Chat).
+
+### 7. Specify
+- **Spec Changes:** Update `AIPanel.vue` to use `marked`.
+- **TODO List:**
+  - [x] Import `marked` in `AIPanel.vue`.
+  - [x] Implement `renderMarkdown` helper.
+  - [x] Update template to use `v-html`.
+  - [x] Add scoped styles for paragraphs and code blocks in chat.
+
+### 8. Execute & Test
+- **Implementation Notes:** Added `marked` rendering to `AIPanel.vue`. Verified that code blocks in the chat now also feature the "Copy" buttons implemented in Cycle #21.
+- **Tests Run:** `npm run test --workspaces` and `npm run lint`
+- **Result:** Success.
+
+### 9. Refine & Document
+- **Bugs Fixed:** None (Feature).
+- **Docs Updated:** Yes (LOG.md).
+- **Commit Hash:** N/A
+
+### 10. Error Check & Debug
+- **Final Validation:** Verified that AI responses with markdown are correctly rendered and styled. Verified that "Copy" buttons in chat work as expected.
+
+## Cycle #23 - 2026-05-29
+**Target State:** AI Generation Abort
+
+### 1. Analyze & Audit
+- **Current State:** AI generations (especially streaming) cannot be cancelled by the user once started.
+- **Observations:** Long responses waste tokens and time if the user realizes early that the direction is wrong.
+- **Audit Findings:** UX gap identified in `improve.md`. Health 7/7.
+
+### 2. Question
+- How can we reliably cancel a streaming fetch request?
+- How should the UI reflect the ability to stop?
+
+### 3. Brainstorm
+- **State A:** Use `AbortController` to signal the `fetch` request to terminate.
+- **State B:** Implement a backend-side cancellation (harder without active socket).
+
+### 4. Evaluate (Pro/Con/Difficulty)
+- **State A (AbortController):**
+  - Pros: Native browser support, clean API, immediate termination of the network request.
+  - Cons: Requires handling `AbortError` in the catch block.
+  - Impact: 8
+  - Difficulty: 3
+  - Priority: 2.66
+
+### 5. Check Compatibility
+- Compatible.
+
+### 6. Prioritize
+- **Selection:** State A (AbortController).
+
+### 7. Specify
+- **Spec Changes:** Update `aiApi.streamProcess` to accept `AbortSignal`. Update `useAI.ts` to manage `AbortController`.
+- **TODO List:**
+  - [x] Update `aiApi` signature and pass `signal` to `fetch`.
+  - [x] Add `currentController` and `abortAction` to `useAI.ts`.
+  - [x] Update `AIPanel.vue` to show a "Stop" button during processing.
+  - [x] Update unit tests to match new API signature.
+
+### 8. Execute & Test
+- **Implementation Notes:** Reordered `streamProcess` parameters to ensure optional ones follow required ones. Updated `AIPanel.test.ts` to expect the `AbortSignal` object. Added a red `stop-circle` icon button to the AI input area.
+- **Tests Run:** `npm run test --workspaces` and `npm run lint`
+- **Result:** Success. 46 tests passing.
+
+### 9. Refine & Document
+- **Bugs Fixed:** Fixed `TS1016` (required parameter after optional) by reordering API method parameters.
+- **Docs Updated:** Yes (LOG.md).
+- **Commit Hash:** N/A
+
+### 10. Error Check & Debug
+- **Final Validation:** Verified that clicking the Stop button immediately terminates the streaming response and shows a `[Generation stopped by user]` message. Verified that subsequent requests still work correctly.
+
+## Cycle #24 - 2026-05-29
+**Target State:** [Codename]
+
+### 1. Analyze & Audit
+- **Current State:** [Brief description of project state]
+- **Observations:** [Strengths, weaknesses, and key findings]
+- **Audit Findings:** [Results of health check: bugs, frame-rate issues, boundary gaps, etc.]
+
+### 2. Question
+- [Question 1: e.g., How can we improve performance?]
+- [Question 2: e.g., What feature would add most value?]
+
+### 3. Brainstorm
+- **State A:** [Description of potential future state]
+- **State B:** [Description of potential future state]
+
+### 4. Evaluate (Pro/Con/Difficulty)
+<!-- Formula: Priority = Impact (1-10) / Difficulty (1-10) -->
+- **State A ([Codename]):**
+  - Pros: [List]
+  - Cons: [List]
+  - Impact: [1-10]
+  - Difficulty: [1-10]
+  - Priority: [Impact / Difficulty]
+- **State B ([Codename]):**
+  - Pros: [List]
+  - Cons: [List]
+  - Difficulty: [1-10]
+
+### 5. Check Compatibility
+- **Incompatible States:** [List codenames of incompatible states]
+
+### 6. Prioritize
+- **Selection:** [Chosen Codename]
+- **Rationale:** [Why this state was chosen over others]
+
+### 7. Specify
+- **Spec Changes:** [Detailed technical changes required]
+- **TODO List:**
+  - [ ] Task 1
+  - [ ] Task 2
+
+### 8. Execute & Test
+- **Implementation Notes:** [Details of the work performed]
+- **Tests Run:** [List of verification steps and results]
+- **Result:** [Success/Fail]
+
+### 9. Refine & Document
+- **Bugs Fixed:** [List of issues found and resolved]
+- **Docs Updated:** [Yes/No]
+- **Commit Hash:** [Hash]
+
+### 10. Error Check & Debug
+- **Final Validation:** [Exhaustive list of checks and final verification results]
