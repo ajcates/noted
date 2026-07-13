@@ -16,8 +16,16 @@ export interface FileMetadata {
  * Throws an error if the path escapes the root.
  */
 export function resolveSafePath(root: string, relativePath: string = '.'): string {
-  const resolvedPath = path.resolve(root, relativePath);
-  if (!resolvedPath.startsWith(root)) {
+  const resolvedRoot = path.resolve(root);
+  if (path.isAbsolute(relativePath)) {
+    const error = new Error('Access denied: Path must be relative to the root directory');
+    (error as any).status = 403;
+    throw error;
+  }
+
+  const resolvedPath = path.resolve(resolvedRoot, relativePath);
+  const relation = path.relative(resolvedRoot, resolvedPath);
+  if (relation === '..' || relation.startsWith(`..${path.sep}`) || path.isAbsolute(relation)) {
     const error = new Error('Access denied: Path outside of root directory');
     (error as any).status = 403;
     throw error;

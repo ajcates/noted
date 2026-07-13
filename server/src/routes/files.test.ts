@@ -58,6 +58,14 @@ describe('Files API', () => {
     expect(response.text).toBe('test content');
   });
 
+  it('rejects traversal and sibling-prefix paths', async () => {
+    const traversal = await request(server).get('/api/files/read?path=../outside.md');
+    const siblingPrefix = await request(server).get('/api/files/read?path=../noted-test-escape/outside.md');
+
+    expect(traversal.status).toBe(403);
+    expect(siblingPrefix.status).toBe(403);
+  });
+
   it('PUT /api/files/write updates file content', async () => {
     const response = await request(server)
       .put('/api/files/write')

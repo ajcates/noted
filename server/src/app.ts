@@ -13,6 +13,7 @@ import chokidar from 'chokidar';
 import { AppConfig } from './config.js';
 import { createFilesRouter } from './routes/files.js';
 import { createAiRouter } from './routes/ai.js';
+import { createSettingsRouter } from './routes/settings.js';
 import { authMiddleware, createAuthRouter } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -41,11 +42,11 @@ export function createApp(config: AppConfig) {
   });
 
   let broadcastTimeout: NodeJS.Timeout | null = null;
-  const pendingChanges = new Set<{ event: string, path: string }>();
+  const pendingChanges = new Map<string, { event: string, path: string }>();
 
   watcher.on('all', (event, filePath) => {
     const relativePath = path.relative(config.rootPath, filePath);
-    pendingChanges.add({ event, path: relativePath });
+    pendingChanges.set(`${event}:${relativePath}`, { event, path: relativePath });
     
     if (broadcastTimeout) clearTimeout(broadcastTimeout);
     broadcastTimeout = setTimeout(() => {
@@ -54,6 +55,10 @@ export function createApp(config: AppConfig) {
       });
       pendingChanges.clear();
     }, 100);
+  });
+
+  httpServer.once('close', () => {
+    void watcher.close();
   });
 
   const router = new Router();
@@ -110,6 +115,10 @@ export function createApp(config: AppConfig) {
   // Mount AI Routes
   const aiRouter = createAiRouter(config);
   app.use(aiRouter.routes()).use(aiRouter.allowedMethods());
+
+  // Mount Settings Routes
+  const settingsRouter = createSettingsRouter(config);
+  app.use(settingsRouter.routes()).use(settingsRouter.allowedMethods());
 
   // Static files
   // In development: ../../frontend/dist

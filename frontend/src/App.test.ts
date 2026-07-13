@@ -100,4 +100,28 @@ describe('App.vue Toolbar Regression', () => {
     const target = wrapper.find('#top-bar-actions');
     expect(target.exists()).toBe(true);
   });
+
+  it('intercepts click on local note links and calls openFile', async () => {
+    const fileStore = useFileStore();
+    const openFileSpy = vi.spyOn(fileStore, 'openFile').mockImplementation(() => Promise.resolve());
+    
+    const wrapper = mount(App, getMountOptions());
+    
+    const link = document.createElement('a');
+    link.setAttribute('href', '@folder/note.md');
+    link.innerText = 'Test Note';
+    document.body.appendChild(link);
+    
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+    link.dispatchEvent(clickEvent);
+    
+    expect(clickEvent.defaultPrevented).toBe(true);
+    expect(openFileSpy).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'note.md',
+      path: 'folder/note.md',
+      type: 'file'
+    }));
+    
+    document.body.removeChild(link);
+  });
 });

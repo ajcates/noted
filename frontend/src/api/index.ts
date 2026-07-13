@@ -77,6 +77,15 @@ export const authApi = {
   },
 };
 
+export const settingsApi = {
+  get(): Promise<any> {
+    return api.get('/settings').then((res) => res.data);
+  },
+  save(settings: any): Promise<any> {
+    return api.post('/settings', settings).then((res) => res.data);
+  },
+};
+
 export interface AIResponse {
   comment: string;
   content: string | null;

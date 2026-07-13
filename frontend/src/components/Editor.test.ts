@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mount, flushPromises } from '@vue/test-utils';
 import Editor from './Editor.vue';
 import { createPinia, setActivePinia } from 'pinia';
+import { db } from '@/utils/db';
 import { useFileStore } from '@/stores/fileStore';
 
 // Mock the API
@@ -12,7 +13,10 @@ vi.mock('@/api', () => ({
 
 vi.mock('@/utils/db', () => ({
   db: {
-    files: { get: vi.fn().mockResolvedValue(null) },
+    files: { 
+      get: vi.fn().mockResolvedValue(null),
+      toArray: vi.fn().mockResolvedValue([])
+    },
     versions: { 
       where: vi.fn().mockReturnValue({
         equals: vi.fn().mockReturnValue({
@@ -107,5 +111,47 @@ describe('Editor.vue', () => {
     
     // Check if panel is open
     expect(wrapper.findComponent({ name: 'AIPanel' }).props('open')).toBe(true);
+  });
+
+  it('shows autocomplete when typing @ character', async () => {
+    const store = useFileStore();
+    store.currentContent = 'Link to ';
+    store.currentFile = { name: 'test.md', path: 'test.md' } as any;
+
+    const dbMock = vi.mocked(db.files.toArray);
+    dbMock.mockResolvedValue([
+      { name: 'target.md', path: 'target.md', type: 'file' },
+      { name: 'other.md', path: 'folder/other.md', type: 'file' }
+    ]);
+
+    const wrapper = mount(Editor);
+    
+    // Trigger onMounted loadAllFiles
+    await flushPromises();
+
+    const textarea = wrapper.find('textarea');
+    await textarea.setValue('Link to @');
+    
+    // Set cursor position right after @
+    const el = textarea.element as HTMLTextAreaElement;
+    el.selectionStart = 9;
+    el.selectionEnd = 9;
+    
+    // Trigger keyup to invoke checkAutocomplete
+    await textarea.trigger('keyup');
+
+    // Autocomplete popup should be open and display the suggestions
+    expect(wrapper.find('.autocomplete-popup').exists()).toBe(true);
+    const items = wrapper.findAll('.autocomplete-item');
+    expect(items.length).toBe(2);
+    expect(items[0].text()).toContain('target.md');
+
+    // Click the first suggestion to select it
+    await items[0].trigger('click');
+    await flushPromises();
+
+    // Verify it replaced `@` with the local link syntax
+    expect(el.value).toBe('Link to [#target.md](@target.md)');
+    expect(wrapper.find('.autocomplete-popup').exists()).toBe(false);
   });
 });

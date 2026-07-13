@@ -1,9 +1,19 @@
 import { defineStore } from 'pinia';
-import { io } from 'socket.io-client';
+import { markRaw } from 'vue';
+import { io, Socket } from 'socket.io-client';
 import { filesApi, FileMetadata, SearchResult } from '@/api';
 import { db } from '@/utils/db';
 
 type SortBy = 'name' | 'mtime' | 'size';
+type FileChange = { event: string; path: string };
+
+const parentPath = (filePath: string) => {
+  const slashIndex = filePath.lastIndexOf('/');
+  return slashIndex === -1 ? '.' : filePath.slice(0, slashIndex);
+};
+
+const isPathOrDescendant = (candidate: string, directory: string) =>
+  candidate === directory || candidate.startsWith(`${directory}/`);
 
 export const useFileStore = defineStore('file', {
   state: () => ({
@@ -14,6 +24,7 @@ export const useFileStore = defineStore('file', {
     recentFiles: [] as FileMetadata[],
     currentFile: null as FileMetadata | null,
     currentContent: '' as string,
+    lastPersistedContent: '' as string,
     isEditing: false,
     readonly: false,
     authEnabled: false,
@@ -23,6 +34,9 @@ export const useFileStore = defineStore('file', {
     conflict: null as { serverContent: string, localContent: string } | null,
     searchResults: [] as SearchResult[],
     isSearching: false,
+    socket: null as Socket | null,
+    onlineHandler: null as (() => void) | null,
+    offlineHandler: null as (() => void) | null,
   }),
   getters: {
     sortedFiles(state) {
@@ -64,36 +78,85 @@ export const useFileStore = defineStore('file', {
   },
   actions: {
     init() {
-      // WebSocket setup
-      const socket = io();
-      socket.on('file-change', async (data: { event: string, path: string }) => {
-        console.log('File change event:', data);
-        
-        // Refresh the file list if the change is in the current directory
-        const parent = data.path.includes('/') ? data.path.substring(0, data.path.lastIndexOf('/')) : '.';
-        if (parent === this.currentPath || data.path === this.currentPath) {
-           this.fetchFiles(this.currentPath);
-        }
-        
-        // If the currently open file changed on the server, we might have a conflict
-        if (this.currentFile && data.path === this.currentFile.path && data.event === 'change') {
-           const serverContent = await filesApi.read(data.path);
-           if (serverContent !== this.currentContent) {
-              this.conflict = {
-                serverContent,
-                localContent: this.currentContent
-              };
-           }
-        }
-      });
+      if (!this.socket) {
+        this.socket = markRaw(io());
+        this.socket.on('file-change', (data: FileChange) => {
+          void this.handleFileChange(data);
+        });
+      }
 
-      window.addEventListener('online', () => {
-        this.isOnline = true;
-        this.syncPendingChanges();
-      });
-      window.addEventListener('offline', () => {
-        this.isOnline = false;
-      });
+      if (!this.onlineHandler) {
+        this.onlineHandler = () => {
+          this.isOnline = true;
+          void this.syncPendingChanges();
+        };
+        window.addEventListener('online', this.onlineHandler);
+      }
+      if (!this.offlineHandler) {
+        this.offlineHandler = () => {
+          this.isOnline = false;
+        };
+        window.addEventListener('offline', this.offlineHandler);
+      }
+    },
+    dispose() {
+      if (this.onlineHandler) {
+        window.removeEventListener('online', this.onlineHandler);
+        this.onlineHandler = null;
+      }
+      if (this.offlineHandler) {
+        window.removeEventListener('offline', this.offlineHandler);
+        this.offlineHandler = null;
+      }
+      if (this.socket) {
+        this.socket.off('file-change');
+        this.socket.disconnect();
+        this.socket = null;
+      }
+    },
+    async handleFileChange(data: FileChange) {
+      const changedPath = data.path.replace(/\\/g, '/');
+      const changedParent = parentPath(changedPath);
+      const openFile = this.currentFile;
+      const openFileRemoved = openFile && data.event.startsWith('unlink') &&
+        isPathOrDescendant(openFile.path, changedPath);
+      const currentDirectoryRemoved = data.event === 'unlinkDir' &&
+        isPathOrDescendant(this.currentPath, changedPath);
+
+      if (openFileRemoved || currentDirectoryRemoved) {
+        const fallbackPath = currentDirectoryRemoved ? parentPath(changedPath) : this.currentPath;
+        this.closeEditor();
+        this.error = 'The open file was removed or moved outside the current directory.';
+        await this.fetchFiles(fallbackPath);
+        return;
+      }
+
+      if (changedParent === this.currentPath || changedPath === this.currentPath) {
+        await this.fetchFiles(this.currentPath);
+      }
+
+      if (!openFile || changedPath !== openFile.path || data.event !== 'change') return;
+
+      try {
+        const serverContent = await filesApi.read(changedPath);
+        if (serverContent === this.currentContent) {
+          this.lastPersistedContent = serverContent;
+          return;
+        }
+
+        if (this.currentContent === this.lastPersistedContent) {
+          this.currentContent = serverContent;
+          this.lastPersistedContent = serverContent;
+          await db.files.put({ ...openFile, content: serverContent });
+        } else {
+          this.conflict = {
+            serverContent,
+            localContent: this.currentContent
+          };
+        }
+      } catch (err: any) {
+        this.error = err.message || 'Failed to refresh the externally changed file';
+      }
     },
     async fetchStatus() {
       try {
@@ -186,6 +249,7 @@ export const useFileStore = defineStore('file', {
         
         this.currentFile = file;
         this.currentContent = content;
+        this.lastPersistedContent = content;
         this.isEditing = true;
         this.addToRecent(file);
         this.syncUrl();
@@ -218,9 +282,13 @@ export const useFileStore = defineStore('file', {
             timestamp: Date.now()
           });
         }
+        this.lastPersistedContent = content;
       } catch (err: any) {
         this.error = err.message || 'Failed to save file';
       }
+    },
+    updateDraft(content: string) {
+      this.currentContent = content;
     },
     async createFile(name: string, type: 'file' | 'directory') {
       const newPath = this.currentPath === '.' ? name : `${this.currentPath}/${name}`;
@@ -400,6 +468,7 @@ export const useFileStore = defineStore('file', {
       this.isEditing = false;
       this.currentFile = null;
       this.currentContent = '';
+      this.lastPersistedContent = '';
       this.syncUrl();
     },
     async navigate(path: string) {

@@ -8,6 +8,7 @@ vi.mock('@/api', () => ({
   filesApi: {
     list: vi.fn(),
     read: vi.fn(),
+    write: vi.fn(),
     status: vi.fn(),
   },
 }));
@@ -19,6 +20,7 @@ vi.mock('@/utils/db', () => ({
       toArray: vi.fn(() => Promise.resolve([])),
       get: vi.fn(),
       put: vi.fn(),
+      where: vi.fn(() => ({ equals: vi.fn(() => ({ modify: vi.fn() })) })),
     },
     pendingChanges: {
       toArray: vi.fn(() => Promise.resolve([])),
@@ -31,6 +33,8 @@ vi.mock('@/utils/db', () => ({
 vi.mock('socket.io-client', () => ({
   io: vi.fn(() => ({
     on: vi.fn(),
+    off: vi.fn(),
+    disconnect: vi.fn(),
   })),
 }));
 
@@ -59,6 +63,21 @@ describe('fileStore', () => {
     expect(store.currentPath).toBe('.');
     expect(store.files).toEqual([]);
     expect(store.loading).toBe(false);
+  });
+
+  it('does not duplicate listeners and disposes its socket', async () => {
+    const { io } = await import('socket.io-client');
+    const store = useFileStore();
+
+    store.init();
+    store.init();
+    expect(io).toHaveBeenCalledTimes(1);
+
+    const socket = (io as any).mock.results[0].value;
+    store.dispose();
+    expect(socket.off).toHaveBeenCalledWith('file-change');
+    expect(socket.disconnect).toHaveBeenCalledOnce();
+    expect(store.socket).toBeNull();
   });
 
   it('fetchFiles updates files and currentPath on success', async () => {
@@ -148,6 +167,67 @@ describe('fileStore', () => {
 
       expect(store.files).toEqual(mockCachedFiles);
       expect(filesApi.list).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('external file changes', () => {
+    const openFile = { name: 'note.md', path: 'note.md', type: 'file' as const, size: 4, mtime: '2023-01-01' };
+
+    it('refreshes the current directory when an entry is added, moved, or removed', async () => {
+      const store = useFileStore();
+      store.currentPath = 'notes';
+      const fetchFiles = vi.spyOn(store, 'fetchFiles').mockResolvedValue();
+
+      await store.handleFileChange({ event: 'add', path: 'notes/new.md' });
+      await store.handleFileChange({ event: 'unlink', path: 'notes/old.md' });
+
+      expect(fetchFiles).toHaveBeenCalledTimes(2);
+      expect(fetchFiles).toHaveBeenCalledWith('notes');
+    });
+
+    it('updates a clean editor from an external write', async () => {
+      const store = useFileStore();
+      store.currentFile = openFile;
+      store.currentContent = 'saved copy';
+      store.lastPersistedContent = 'saved copy';
+      (filesApi.read as any).mockResolvedValue('changed outside noted');
+
+      await store.handleFileChange({ event: 'change', path: 'note.md' });
+
+      expect(store.currentContent).toBe('changed outside noted');
+      expect(store.lastPersistedContent).toBe('changed outside noted');
+      expect(store.conflict).toBeNull();
+    });
+
+    it('keeps a local draft and opens a conflict for an external write', async () => {
+      const store = useFileStore();
+      store.currentFile = openFile;
+      store.currentContent = 'unsaved local draft';
+      store.lastPersistedContent = 'saved copy';
+      (filesApi.read as any).mockResolvedValue('changed outside noted');
+
+      await store.handleFileChange({ event: 'change', path: 'note.md' });
+
+      expect(store.currentContent).toBe('unsaved local draft');
+      expect(store.conflict).toEqual({
+        localContent: 'unsaved local draft',
+        serverContent: 'changed outside noted',
+      });
+    });
+
+    it('returns to the listing when the open file is deleted or moved', async () => {
+      const store = useFileStore();
+      store.currentPath = 'notes';
+      store.currentFile = { ...openFile, path: 'notes/note.md' };
+      store.currentContent = 'saved copy';
+      store.isEditing = true;
+      const fetchFiles = vi.spyOn(store, 'fetchFiles').mockResolvedValue();
+
+      await store.handleFileChange({ event: 'unlink', path: 'notes/note.md' });
+
+      expect(store.isEditing).toBe(false);
+      expect(store.currentFile).toBeNull();
+      expect(fetchFiles).toHaveBeenCalledWith('notes');
     });
   });
 });

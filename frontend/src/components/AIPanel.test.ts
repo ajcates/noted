@@ -72,7 +72,7 @@ describe('AIPanel.vue', () => {
     await restructureBtn?.trigger('click');
     
     // Verify it filled the prompt box
-    expect(wrapper.vm.userInput).toBe('Restructure');
+    expect((wrapper.vm as any).userInput).toBe('Restructure');
     
     // Trigger chat submit
     await wrapper.find('mdui-button-icon[slot="end-icon"]').trigger('click');

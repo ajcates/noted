@@ -37,3 +37,8 @@
 - Hidden the **File Browser search bar by default**, adding a "Find" toggle button in the top app bar that automatically reveals and focuses it.
 - Moved the Search (Search & Replace) button from the bottom toolbar back to the top app bar actions (`#top-bar-actions`) and updated the unit tests.
 - Re-routed the AI Panel to slide up from the bottom of the editor instead of sliding down from the top, updated swipe gestures (swipe down to close), and configured global dark mode styling for the snackbars.
+- Optimized the AI Panel layout on mobile by reducing its height from 400px to 280px, hiding the redundant 'Presets' section title, sizing buttons/inputs to be more compact, and updating the editor's padding-bottom to match the new height.
+- Supported local note linking using the `[#link text](@folder/notename.md)` format, intercepting clicks in the markdown preview to open the target note directly.
+- Implemented an autocomplete suggestions popup when typing the `@` character in the note editor, offering keyboard and mouse selection for available markdown files.
+- Built out settings persistence by saving application settings (Custom AI Instructions and Theme) in a zero-dependency `noted.yaml` file in the directory `noted` is running.
+

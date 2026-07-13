@@ -2,6 +2,7 @@
 import { ref, onMounted, nextTick, watch } from 'vue';
 import { useAI } from '@/composables/useAI';
 import { marked } from 'marked';
+import { sanitizeHtml } from '@/utils/sanitizeHtml';
 import '@mdui/icons/close.js';
 import '@mdui/icons/send.js';
 import '@mdui/icons/auto-awesome.js';
@@ -113,7 +114,7 @@ const copyToClipboard = (text: string) => {
 };
 
 const renderMarkdown = (content: string) => {
-  return marked.parse(content);
+  return sanitizeHtml(marked.parse(content) as string);
 };
 
 const formatTime = (ts: number) => {
@@ -399,6 +400,21 @@ const onTouchEnd = (e: TouchEvent) => {
   margin-bottom: 0.5em;
 }
 
+.msg-content :deep(a[href^="@"]) {
+  color: #CDDC39;
+  text-decoration: none;
+  background-color: rgba(205, 220, 57, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  border-bottom: 1px dashed rgba(205, 220, 57, 0.4);
+  transition: all 0.2s ease;
+}
+.msg-content :deep(a[href^="@"]:hover) {
+  background-color: rgba(205, 220, 57, 0.25);
+  border-bottom-style: solid;
+}
+
 .msg-content :deep(p:last-child) {
   margin-bottom: 0;
 }
@@ -529,14 +545,24 @@ const onTouchEnd = (e: TouchEvent) => {
 /* Mobile responsive */
 @media (max-width: 767px) {
   .ai-panel {
-    height: 400px;
-    bottom: -400px;
+    height: 280px;
+    bottom: -280px;
     top: auto;
   }
   
   .ai-panel.open {
     bottom: 56px;
     top: auto;
+  }
+
+  .panel-header {
+    height: 40px;
+    padding: 0 12px;
+  }
+
+  .panel-header mdui-button-icon {
+    width: 32px;
+    height: 32px;
   }
   
   .panel-body {
@@ -552,8 +578,12 @@ const onTouchEnd = (e: TouchEvent) => {
   
   .presets-container {
     flex: none;
-    padding: 6px 12px;
+    padding: 4px 8px 0 8px;
     overflow-y: visible;
+  }
+
+  .presets-container .section-title {
+    display: none;
   }
   
   .presets-grid {
@@ -570,11 +600,49 @@ const onTouchEnd = (e: TouchEvent) => {
   
   .preset-btn {
     flex-shrink: 0;
+    --mdui-button-height: 28px;
+    font-size: 10px;
+    padding: 0 8px;
   }
   
   .chat-input-area {
+    padding: 4px 8px;
+  }
+
+  .chat-input-area mdui-text-field {
+    --mdui-text-field-height: 36px;
+    font-size: 12.5px;
+  }
+  
+  .chat-log {
     padding: 8px 12px;
+    gap: 6px;
+  }
+  
+  .chat-msg {
+    max-width: 90%;
+    padding: 6px 10px;
+    font-size: 12.5px;
+  }
+  
+  .chat-empty {
+    margin-top: 16px;
+    font-size: 12px;
+  }
+
+  .questions-area {
+    margin-top: 4px;
+    padding-top: 4px;
+    gap: 4px;
+  }
+
+  .question-text {
+    font-size: 11px;
+  }
+
+  .options-grid mdui-button {
+    --mdui-button-height: 24px;
+    font-size: 10px;
   }
 }
 </style>
-

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, defineAsyncComponent } from 'vue';
+import { ref, onMounted, onBeforeUnmount, computed, watch, defineAsyncComponent } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -25,6 +25,12 @@ const fileStore = useFileStore();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const drawerOpen = ref(false);
+const settingsDialogOpen = ref(false);
+
+const openSettings = () => {
+  settingsDialogOpen.value = true;
+  drawerOpen.value = false;
+};
 
 const handleSort = (by: 'name' | 'mtime' | 'size') => {
   console.log('Sorting by:', by);
@@ -38,21 +44,54 @@ const showLogin = computed(() => {
   return fileStore.authEnabled && !authStore.isAuthenticated;
 });
 
+const handlePopState = () => {
+  void fileStore.handleUrl();
+};
+
+const handleAuthError = () => {
+  authStore.logout();
+};
+
+const handleNoteLink = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  const anchor = target.closest('a');
+  if (!anchor) return;
+
+  const href = anchor.getAttribute('href');
+  if (href && href.startsWith('@')) {
+    e.preventDefault();
+    const filePath = href.substring(1);
+    const segments = filePath.split('/');
+    const name = segments[segments.length - 1];
+    void fileStore.openFile({
+      name,
+      path: filePath,
+      type: 'file',
+      size: 0,
+      mtime: new Date().toISOString()
+    });
+  }
+};
+
 onMounted(async () => {
+  window.addEventListener('popstate', handlePopState);
+  window.addEventListener('auth-error', handleAuthError);
+  window.addEventListener('click', handleNoteLink);
+
   fileStore.init();
+  await settingsStore.loadSettings();
   settingsStore.applyTheme();
   await fileStore.fetchStatus();
   if (!showLogin.value) {
     await fileStore.handleUrl();
   }
+});
 
-  window.addEventListener('popstate', () => {
-    fileStore.handleUrl();
-  });
-
-  window.addEventListener('auth-error', () => {
-    authStore.logout();
-  });
+onBeforeUnmount(() => {
+  window.removeEventListener('popstate', handlePopState);
+  window.removeEventListener('auth-error', handleAuthError);
+  window.removeEventListener('click', handleNoteLink);
+  fileStore.dispose();
 });
 
 // Re-handle URL when authenticated
@@ -169,7 +208,7 @@ const buildNumber = __BUILD_NUMBER__;
 
         <mdui-divider></mdui-divider>
 
-        <mdui-list-item>
+        <mdui-list-item @click="openSettings">
           <mdui-icon-settings slot="icon"></mdui-icon-settings>
           Settings
         </mdui-list-item>
@@ -179,34 +218,54 @@ const buildNumber = __BUILD_NUMBER__;
           Logout
         </mdui-list-item>
 
-        <mdui-divider></mdui-divider>
-        <mdui-list-subheader>AI Settings</mdui-list-subheader>
-        <div style="padding: 0 16px 16px 16px;">
-          <mdui-text-field
-            label="Custom AI Instructions"
-            rows="3"
-            area
-            :value="settingsStore.aiInstructions"
-            @input="(e: any) => settingsStore.setAiInstructions(e.target.value)"
-            helper="e.g. 'Use British English', 'Be concise'"
-          ></mdui-text-field>
-        </div>
-
-        <mdui-divider></mdui-divider>
-        <mdui-list-subheader>Theme</mdui-list-subheader>
-        <mdui-segmented-button-group 
-          :value="settingsStore.theme" 
-          @change="(e: any) => settingsStore.setTheme(e.target.value)"
-          style="margin: 0 16px 16px 16px;"
-        >
-          <mdui-segmented-button value="light">Light</mdui-segmented-button>
-          <mdui-segmented-button value="dark">Dark</mdui-segmented-button>
-          <mdui-segmented-button value="auto">Auto</mdui-segmented-button>
-        </mdui-segmented-button-group>
-
         <div class="build-number">Build: {{ buildNumber }}</div>
       </mdui-list>
     </mdui-navigation-drawer>
+
+    <!-- Settings Dialog -->
+    <mdui-dialog 
+      :open="settingsDialogOpen" 
+      @overlay-click="settingsDialogOpen = false" 
+      headline="Settings"
+      style="max-width: 500px;"
+    >
+      <div class="settings-dialog-content">
+        <div class="settings-section">
+          <div class="settings-section-title">Appearance</div>
+          <div class="settings-row">
+            <span class="settings-label">Theme</span>
+            <mdui-segmented-button-group 
+              :value="settingsStore.theme" 
+              @change="(e: any) => settingsStore.setTheme(e.target.value)"
+              class="theme-segmented-group"
+            >
+              <mdui-segmented-button value="light">Light</mdui-segmented-button>
+              <mdui-segmented-button value="dark">Dark</mdui-segmented-button>
+              <mdui-segmented-button value="auto">Auto</mdui-segmented-button>
+            </mdui-segmented-button-group>
+          </div>
+        </div>
+
+        <mdui-divider style="margin: 16px 0;"></mdui-divider>
+
+        <div class="settings-section">
+          <div class="settings-section-title">AI Assistant</div>
+          <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+            <span class="settings-label">Custom AI Instructions</span>
+            <mdui-text-field
+              label="System instructions to customize AI edits"
+              rows="4"
+              area
+              :value="settingsStore.aiInstructions"
+              @input="(e: any) => settingsStore.setAiInstructions(e.target.value)"
+              helper="e.g. 'Use British English', 'Avoid passive voice'"
+              variant="outlined"
+            ></mdui-text-field>
+          </div>
+        </div>
+      </div>
+      <mdui-button slot="action" variant="text" @click="settingsDialogOpen = false">Close</mdui-button>
+    </mdui-dialog>
 
     <mdui-layout-main class="main-content">
       <Transition :name="transitionName">
@@ -312,5 +371,37 @@ const buildNumber = __BUILD_NUMBER__;
 .slide-left-leave-to {
   transform: translateX(30%);
   opacity: 0;
+}
+
+.settings-dialog-content {
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #CDDC39;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.settings-label {
+  font-size: 14px;
+  color: rgb(var(--mdui-color-on-surface));
+}
+.theme-segmented-group {
+  --mdui-segmented-button-height: 36px;
 }
 </style>
