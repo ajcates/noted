@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import App from './App.vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { useFileStore } from '@/stores/fileStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 describe('App.vue Toolbar Regression', () => {
   beforeEach(() => {
@@ -38,8 +39,15 @@ describe('App.vue Toolbar Regression', () => {
     global: {
       stubs: {
         Breadcrumbs: true,
-        FileBrowser: true,
-        Editor: { template: '<div id="editor"><div id="top-bar-actions"></div></div>' },
+        FileBrowser: {
+          emits: ['selectionChange'],
+          template: '<div id="file-browser"><button id="select-two" @click="$emit(\'selectionChange\', 2)">Select two</button></div>'
+        },
+        Editor: {
+          props: ['sidebarOpen'],
+          emits: ['update:sidebarOpen', 'openSettings'],
+          template: '<div id="editor" :data-sidebar-open="sidebarOpen"><button id="editor-settings" @click="$emit(\'openSettings\')">Settings</button><div id="top-bar-actions"></div></div>'
+        },
         Login: true,
         ConflictResolver: true,
         'mdui-layout': { template: '<div><slot></slot></div>' },
@@ -47,6 +55,8 @@ describe('App.vue Toolbar Regression', () => {
         'mdui-button-icon': { template: '<button><slot></slot></button>' },
         'mdui-icon-menu': true,
         'mdui-icon-arrow-back': true,
+        'mdui-icon-add': true,
+        'mdui-icon-remove': true,
         'mdui-dropdown': { template: '<div><slot name="trigger"></slot><slot></slot></div>' },
         'mdui-icon-sort': true,
         'mdui-menu': { template: '<div><slot></slot></div>' },
@@ -99,6 +109,71 @@ describe('App.vue Toolbar Regression', () => {
     const wrapper = mount(App, getMountOptions());
     const target = wrapper.find('#top-bar-actions');
     expect(target.exists()).toBe(true);
+  });
+
+  it('replaces the directory title and sort control when files are selected', async () => {
+    const fileStore = useFileStore();
+    fileStore.isEditing = false;
+    const wrapper = mount(App, getMountOptions());
+
+    await wrapper.find('#select-two').trigger('click');
+
+    expect(wrapper.find('.selection-title').text()).toBe('2 Selected');
+    expect(wrapper.find('[mdui-tooltip="Sort"]').exists()).toBe(false);
+  });
+
+  it('uses the leading editor button to open the sidebar and return to the file list', async () => {
+    const fileStore = useFileStore();
+    fileStore.isEditing = true;
+    const closeEditorSpy = vi.spyOn(fileStore, 'closeEditor');
+
+    const wrapper = mount(App, getMountOptions());
+    const leadingButton = wrapper.find('[aria-label="Open file sidebar"]');
+
+    expect(leadingButton.exists()).toBe(true);
+    expect(wrapper.find('#editor').attributes('data-sidebar-open')).toBe('false');
+
+    await leadingButton.trigger('click');
+
+    expect(wrapper.find('[aria-label="Back to file list"]').exists()).toBe(true);
+    expect(wrapper.find('#editor').attributes('data-sidebar-open')).toBe('true');
+    expect(wrapper.find('.app-top-bar').classes()).toContain('editor-sidebar-open');
+    expect(wrapper.find('.editor-title').exists()).toBe(true);
+
+    await wrapper.find('[aria-label="Back to file list"]').trigger('click');
+
+    expect(closeEditorSpy).toHaveBeenCalledOnce();
+    expect(fileStore.isEditing).toBe(false);
+    expect(wrapper.find('[aria-label="Open menu"]').exists()).toBe(true);
+    expect(wrapper.find('#editor').exists()).toBe(false);
+  });
+
+  it('opens settings from the editor sidebar action', async () => {
+    const fileStore = useFileStore();
+    fileStore.isEditing = true;
+
+    const wrapper = mount(App, getMountOptions());
+    await wrapper.find('#editor-settings').trigger('click');
+
+    const dialog = wrapper.find('mdui-dialog[headline="Settings"]');
+    expect(dialog.attributes('open')).toBe('true');
+  });
+
+  it('uses a compact font-size stepper in editor settings', async () => {
+    const settingsStore = useSettingsStore();
+    settingsStore.editorFontSize = 15;
+    const setFontSize = vi.spyOn(settingsStore, 'setEditorFontSize').mockResolvedValue();
+    const wrapper = mount(App, getMountOptions());
+
+    const input = wrapper.find('.font-size-input');
+    expect((input.element as HTMLInputElement).value).toBe('15');
+
+    await wrapper.find('[aria-label="Increase editor font size"]').trigger('click');
+    expect(setFontSize).toHaveBeenCalledWith(16);
+
+    await input.setValue(20);
+    await input.trigger('change');
+    expect(setFontSize).toHaveBeenCalledWith(20);
   });
 
   it('intercepts click on local note links and calls openFile', async () => {

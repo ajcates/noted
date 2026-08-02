@@ -88,6 +88,35 @@ describe('Files API', () => {
     expect(await fs.pathExists(path.join(tempDir, 'new.md'))).toBe(true);
   });
 
+  it('POST /api/files/create refuses to reuse an existing file', async () => {
+    const response = await request(server)
+      .post('/api/files/create')
+      .send({ path: 'test.md', type: 'file' });
+
+    expect(response.status).toBe(409);
+    expect(await fs.readFile(path.join(tempDir, 'test.md'), 'utf-8')).toBe('test content');
+  });
+
+  it('PATCH /api/files/rename moves a file to another directory', async () => {
+    const response = await request(server)
+      .patch('/api/files/rename')
+      .send({ oldPath: 'test.md', newPath: 'subdir/test.md' });
+
+    expect(response.status).toBe(200);
+    expect(await fs.pathExists(path.join(tempDir, 'test.md'))).toBe(false);
+    expect(await fs.readFile(path.join(tempDir, 'subdir/test.md'), 'utf-8')).toBe('test content');
+  });
+
+  it('PATCH /api/files/rename refuses to overwrite at the destination', async () => {
+    const response = await request(server)
+      .patch('/api/files/rename')
+      .send({ oldPath: 'test.md', newPath: 'subdir/subtest.md' });
+
+    expect(response.status).toBe(409);
+    expect(await fs.readFile(path.join(tempDir, 'test.md'), 'utf-8')).toBe('test content');
+    expect(await fs.readFile(path.join(tempDir, 'subdir/subtest.md'), 'utf-8')).toBe('subtest content');
+  });
+
   it('DELETE /api/files/delete removes a file', async () => {
     const response = await request(server)
       .delete('/api/files/delete')

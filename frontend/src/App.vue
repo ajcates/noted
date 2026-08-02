@@ -20,16 +20,25 @@ import '@mdui/icons/cloud-off.js';
 import '@mdui/icons/sort.js';
 import '@mdui/icons/arrow-upward.js';
 import '@mdui/icons/arrow-downward.js';
+import '@mdui/icons/add.js';
+import '@mdui/icons/remove.js';
 
 const fileStore = useFileStore();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const drawerOpen = ref(false);
 const settingsDialogOpen = ref(false);
+const editorSidebarOpen = ref(false);
+const fileSelectionCount = ref(0);
 
 const openSettings = () => {
   settingsDialogOpen.value = true;
   drawerOpen.value = false;
+};
+
+const openEditorSettings = () => {
+  editorSidebarOpen.value = false;
+  openSettings();
 };
 
 const handleSort = (by: 'name' | 'mtime' | 'size') => {
@@ -104,14 +113,23 @@ watch(() => authStore.isAuthenticated, async (isAuth) => {
 // Watch isEditing to determine slide direction
 watch(() => fileStore.isEditing, (isEditing) => {
   transitionName.value = isEditing ? 'slide-right' : 'slide-left';
+  editorSidebarOpen.value = false;
+  if (isEditing) {
+    fileSelectionCount.value = 0;
+  }
 });
 
 const toggleDrawer = () => {
   drawerOpen.value = !drawerOpen.value;
 };
 
-const closeEditor = () => {
-  fileStore.closeEditor();
+const handleEditorLeadingAction = () => {
+  if (editorSidebarOpen.value) {
+    fileStore.closeEditor();
+    return;
+  }
+
+  editorSidebarOpen.value = true;
 };
 
 const openRecent = (file: any) => {
@@ -133,7 +151,11 @@ const buildNumber = __BUILD_NUMBER__;
   </template>
   
   <mdui-layout v-else>
-    <mdui-top-app-bar style="height: 56px;">
+    <mdui-top-app-bar
+      class="app-top-bar"
+      :class="{ 'editor-sidebar-open': fileStore.isEditing && editorSidebarOpen }"
+      style="height: 56px;"
+    >
       <mdui-button-icon 
         v-if="!fileStore.isEditing" 
         @click="toggleDrawer" 
@@ -142,22 +164,27 @@ const buildNumber = __BUILD_NUMBER__;
       >
         <mdui-icon-menu></mdui-icon-menu>
       </mdui-button-icon>
-      <mdui-button-icon 
-        v-else 
-        @click="closeEditor" 
+      <mdui-button-icon
+        v-else
+        class="editor-sidebar-button"
+        @click="handleEditorLeadingAction"
         style="--mdui-button-icon-size: 40px;"
-        aria-label="Back to file list"
+        :aria-label="editorSidebarOpen ? 'Back to file list' : 'Open file sidebar'"
       >
-        <mdui-icon-arrow-back></mdui-icon-arrow-back>
+        <mdui-icon-arrow-back v-if="editorSidebarOpen"></mdui-icon-arrow-back>
+        <mdui-icon-menu v-else></mdui-icon-menu>
       </mdui-button-icon>
       
       <div class="top-bar-content">
-        <Breadcrumbs v-if="!fileStore.isEditing" />
+        <div v-if="!fileStore.isEditing && fileSelectionCount > 0" class="selection-title">
+          {{ fileSelectionCount }} Selected
+        </div>
+        <Breadcrumbs v-else-if="!fileStore.isEditing" />
         <div v-else class="editor-title">{{ fileStore.currentFile?.name }}</div>
       </div>
 
       <div id="top-bar-actions" class="top-bar-actions">
-        <mdui-dropdown v-if="!fileStore.isEditing" placement="bottom-end">
+        <mdui-dropdown v-if="!fileStore.isEditing && fileSelectionCount === 0" placement="bottom-end">
           <mdui-button-icon slot="trigger" mdui-tooltip="Sort">
             <mdui-icon-sort></mdui-icon-sort>
           </mdui-button-icon>
@@ -249,6 +276,56 @@ const buildNumber = __BUILD_NUMBER__;
         <mdui-divider style="margin: 16px 0;"></mdui-divider>
 
         <div class="settings-section">
+          <div class="settings-section-title">Editor</div>
+          <div class="settings-row">
+            <div class="editor-setting-copy">
+              <span class="settings-label">Font size</span>
+              <span class="settings-value">12–24 px</span>
+            </div>
+            <div class="font-size-stepper">
+              <mdui-button-icon
+                aria-label="Decrease editor font size"
+                :disabled="settingsStore.editorFontSize <= 12"
+                @click="settingsStore.setEditorFontSize(settingsStore.editorFontSize - 1)"
+              >
+                <mdui-icon-remove></mdui-icon-remove>
+              </mdui-button-icon>
+              <input
+                class="font-size-input"
+                type="number"
+                min="12"
+                max="24"
+                step="1"
+                :value="settingsStore.editorFontSize"
+                aria-label="Editor font size"
+                @change="(e: any) => settingsStore.setEditorFontSize(Number(e.target.value))"
+              />
+              <span class="font-size-unit">px</span>
+              <mdui-button-icon
+                aria-label="Increase editor font size"
+                :disabled="settingsStore.editorFontSize >= 24"
+                @click="settingsStore.setEditorFontSize(settingsStore.editorFontSize + 1)"
+              >
+                <mdui-icon-add></mdui-icon-add>
+              </mdui-button-icon>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="editor-setting-copy">
+              <span class="settings-label">Word wrap</span>
+              <span class="settings-value">Wrap long lines in the editor</span>
+            </div>
+            <mdui-switch
+              :checked="settingsStore.wordWrap"
+              aria-label="Word wrap"
+              @change="(e: any) => settingsStore.setWordWrap(Boolean(e.target.checked))"
+            ></mdui-switch>
+          </div>
+        </div>
+
+        <mdui-divider style="margin: 16px 0;"></mdui-divider>
+
+        <div class="settings-section">
           <div class="settings-section-title">AI Assistant</div>
           <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
             <span class="settings-label">Custom AI Instructions</span>
@@ -270,10 +347,13 @@ const buildNumber = __BUILD_NUMBER__;
     <mdui-layout-main class="main-content">
       <Transition :name="transitionName">
         <div v-if="!fileStore.isEditing" class="view-container">
-          <FileBrowser />
+          <FileBrowser @selection-change="fileSelectionCount = $event" />
         </div>
         <div v-else class="view-container">
-          <Editor />
+          <Editor
+            v-model:sidebar-open="editorSidebarOpen"
+            @open-settings="openEditorSettings"
+          />
         </div>
       </Transition>
     </mdui-layout-main>
@@ -296,15 +376,43 @@ const buildNumber = __BUILD_NUMBER__;
   margin-left: 4px;
   height: 100%;
 }
+.app-top-bar.editor-sidebar-open {
+  z-index: 1000;
+  background: transparent;
+  box-shadow: none;
+}
+.app-top-bar.editor-sidebar-open .top-bar-actions,
+.app-top-bar.editor-sidebar-open .offline-icon {
+  visibility: hidden;
+  pointer-events: none;
+}
+.app-top-bar.editor-sidebar-open .editor-sidebar-button,
+.app-top-bar.editor-sidebar-open .editor-title {
+  position: relative;
+  z-index: 1;
+}
 .top-bar-actions {
   display: flex;
   align-items: center;
+  height: 40px;
   flex-shrink: 0;
 }
 .editor-title {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  line-height: 1.25;
   font-size: 16px;
   font-weight: 400;
   margin-left: 4px;
+}
+.selection-title {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #CDDC39;
 }
 .build-number {
   padding: 8px 16px;
@@ -400,6 +508,50 @@ const buildNumber = __BUILD_NUMBER__;
 .settings-label {
   font-size: 14px;
   color: rgb(var(--mdui-color-on-surface));
+}
+.editor-setting-copy {
+  min-width: 110px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.settings-value {
+  font-size: 12px;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.font-size-stepper {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 2px 4px;
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  border-radius: 20px;
+}
+.font-size-stepper mdui-button-icon {
+  --mdui-button-icon-size: 32px;
+}
+.font-size-input {
+  width: 38px;
+  padding: 4px 2px;
+  border: 0;
+  border-bottom: 1px solid rgb(var(--mdui-color-outline));
+  outline: none;
+  background: transparent;
+  color: rgb(var(--mdui-color-on-surface));
+  font: inherit;
+  text-align: center;
+  appearance: textfield;
+}
+.font-size-input::-webkit-inner-spin-button,
+.font-size-input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+.font-size-unit {
+  margin-left: -2px;
+  font-size: 12px;
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 .theme-segmented-group {
   --mdui-segmented-button-height: 36px;

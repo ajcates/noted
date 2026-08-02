@@ -15,7 +15,7 @@ And Vue.js 3 should be used wirh Pinia for state managment.
 
  
 
-`noted [path] [options]`
+`noted [path] [opt
 
 -p, --port [6767] Port to use defaults to 6767 and if its already in use a warning will be shown and a it will add one to the port number
 

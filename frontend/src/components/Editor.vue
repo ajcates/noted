@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, computed, nextTick } from 'vue';
 import { useFileStore } from '@/stores/fileStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import debounce from 'lodash/debounce';
 import { marked } from 'marked';
 import { sanitizeHtml } from '@/utils/sanitizeHtml';
@@ -19,7 +20,6 @@ import '@mdui/icons/keyboard-arrow-down.js';
 import '@mdui/icons/visibility.js';
 import '@mdui/icons/history.js';
 import '@mdui/icons/edit.js';
-import '@mdui/icons/menu.js';
 import '@mdui/icons/folder.js';
 import '@mdui/icons/insert-drive-file.js';
 import '@mdui/icons/arrow-back.js';
@@ -32,12 +32,23 @@ import '@mdui/icons/format-list-bulleted.js';
 import '@mdui/icons/link.js';
 import '@mdui/icons/data-object.js';
 import '@mdui/icons/spellcheck.js';
+import '@mdui/icons/more-vert.js';
+import '@mdui/icons/save-as.js';
+import '@mdui/icons/settings.js';
 
 const fileStore = useFileStore();
+const settingsStore = useSettingsStore();
+const props = defineProps<{
+  sidebarOpen?: boolean;
+}>();
+const emit = defineEmits<{
+  'update:sidebarOpen': [open: boolean];
+  'openSettings': [];
+}>();
 const historyOpen = ref(false);
 const versions = ref<any[]>([]);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
-const sidebarOpen = ref(false);
+const sidebarOpen = computed(() => props.sidebarOpen ?? false);
 
 const openHistory = async () => {
   if (!fileStore.currentFile) return;
@@ -58,6 +69,8 @@ const originalContent = ref('');
 const suggestionSnackbarOpen = ref(false);
 const pendingSuggestion = ref('');
 const previewMode = ref(false);
+const saveAsDialogOpen = ref(false);
+const saveAsName = ref('');
 
 const autocompleteOpen = ref(false);
 const autocompleteQuery = ref('');
@@ -295,12 +308,36 @@ const handleAIApply = ({ content }: { content: string }) => {
   handleSuggestionReceived(content);
 };
 
-const toggleSidebar = () => {
-  sidebarOpen.value = !sidebarOpen.value;
+const openSaveAsDialog = () => {
+  const currentName = fileStore.currentFile?.name || 'note.md';
+  const extensionIndex = currentName.lastIndexOf('.');
+  const hasExtension = extensionIndex > 0;
+  const baseName = hasExtension ? currentName.slice(0, extensionIndex) : currentName;
+  const extension = hasExtension ? currentName.slice(extensionIndex) : '';
+
+  saveAsName.value = `${baseName} copy${extension}`;
+  saveAsDialogOpen.value = true;
+};
+
+const confirmSaveAs = async () => {
+  const name = saveAsName.value.trim();
+  if (!name) return;
+
+  debouncedSave.cancel();
+  const saved = await fileStore.saveFileAs(name, localContent.value);
+  if (saved) {
+    saveAsDialogOpen.value = false;
+  } else if (!fileStore.readonly) {
+    debouncedSave(localContent.value);
+  }
 };
 
 const closeSidebar = () => {
-  sidebarOpen.value = false;
+  emit('update:sidebarOpen', false);
+};
+
+const openEditorSettings = () => {
+  emit('openSettings');
 };
 
 const openSidebarEntry = async (entry: any) => {
@@ -311,7 +348,7 @@ const openSidebarEntry = async (entry: any) => {
   }
 
   if (isMobileSidebar()) {
-    sidebarOpen.value = false;
+    closeSidebar();
   }
 };
 
@@ -345,7 +382,6 @@ watch(() => fileStore.files, () => {
 onMounted(() => {
   textareaRef.value?.focus();
   loadAllFiles();
-  sidebarOpen.value = !isMobileSidebar();
 
   marked.use({
     renderer: {
@@ -369,9 +405,9 @@ onMounted(() => {
 
 <template>
   <div class="editor-wrapper" :class="{ 'ai-open': aiPanelOpen }">
-    <div v-if="sidebarOpen && isMobileSidebar()" class="sidebar-backdrop" @click="closeSidebar"></div>
+    <Teleport to="body">
+      <div v-if="sidebarOpen" class="sidebar-backdrop" @click="closeSidebar"></div>
 
-    <div class="editor-shell">
       <aside class="editor-sidebar" :class="{ 'is-open': sidebarOpen }">
         <div class="sidebar-header">
           <div class="sidebar-label">Directory</div>
@@ -398,8 +434,18 @@ onMounted(() => {
             {{ entry.name }}
           </mdui-list-item>
         </mdui-list>
-      </aside>
 
+        <div class="sidebar-settings">
+          <mdui-divider></mdui-divider>
+          <mdui-list-item ripple @click="openEditorSettings">
+            <mdui-icon-settings slot="icon"></mdui-icon-settings>
+            Settings
+          </mdui-list-item>
+        </div>
+      </aside>
+    </Teleport>
+
+    <div class="editor-shell">
       <div class="editor-main">
         <Transition name="search-slide">
           <div v-if="searchOpen" class="search-bar">
@@ -455,6 +501,9 @@ onMounted(() => {
             v-model="localContent"
             :readonly="fileStore.readonly"
             class="native-textarea"
+            :class="{ 'word-wrap-off': !settingsStore.wordWrap }"
+            :style="{ fontSize: `${settingsStore.editorFontSize}px` }"
+            :wrap="settingsStore.wordWrap ? 'soft' : 'off'"
             placeholder="Start typing..."
             spellcheck="false"
             @keyup="handleTextareaKeyUp"
@@ -490,6 +539,28 @@ onMounted(() => {
       <mdui-button slot="action" variant="text" @click="historyOpen = false">Close</mdui-button>
     </mdui-dialog>
 
+    <mdui-dialog
+      :open="saveAsDialogOpen"
+      @overlay-click="saveAsDialogOpen = false"
+      headline="Save as"
+    >
+      <mdui-text-field
+        v-model="saveAsName"
+        label="File name"
+        autofocus
+        @keyup.enter="confirmSaveAs"
+      ></mdui-text-field>
+      <mdui-button slot="action" variant="text" @click="saveAsDialogOpen = false">Cancel</mdui-button>
+      <mdui-button
+        slot="action"
+        variant="filled"
+        :disabled="!saveAsName.trim() || fileStore.readonly"
+        @click="confirmSaveAs"
+      >
+        Save
+      </mdui-button>
+    </mdui-dialog>
+
     <Teleport to="body">
       <AIPanel
         :open="aiPanelOpen"
@@ -514,27 +585,6 @@ onMounted(() => {
 
     <Teleport to="#top-bar-actions">
       <div class="editor-top-actions">
-        <mdui-button-icon
-          @click="toggleSidebar"
-          tooltip="Toggle file sidebar"
-          aria-label="Toggle file sidebar"
-          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-        >
-          <mdui-icon-menu></mdui-icon-menu>
-        </mdui-button-icon>
-
-        <mdui-button-icon
-          @click="toggleSearch"
-          tooltip="Search & Replace"
-          aria-label="Search and replace"
-          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-          tabindex="-1"
-          @pointerdown.prevent
-          @mousedown.prevent
-        >
-          <mdui-icon-search></mdui-icon-search>
-        </mdui-button-icon>
-
         <mdui-dropdown @pointerdown.prevent @mousedown.prevent>
           <mdui-button-icon
             slot="trigger"
@@ -590,31 +640,6 @@ onMounted(() => {
         </mdui-button-icon>
 
         <mdui-button-icon
-          :tooltip="previewMode ? 'Back to editor' : 'Preview'"
-          :aria-label="previewMode ? 'Back to editor' : 'Preview note'"
-          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-          tabindex="-1"
-          @click="previewMode = !previewMode"
-          @pointerdown.prevent
-          @mousedown.prevent
-        >
-          <mdui-icon-visibility v-if="!previewMode"></mdui-icon-visibility>
-          <mdui-icon-edit v-else></mdui-icon-edit>
-        </mdui-button-icon>
-
-        <mdui-button-icon
-          tooltip="History"
-          aria-label="Version history"
-          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
-          tabindex="-1"
-          @click="openHistory"
-          @pointerdown.prevent
-          @mousedown.prevent
-        >
-          <mdui-icon-history></mdui-icon-history>
-        </mdui-button-icon>
-
-        <mdui-button-icon
           @click="aiPanelOpen = !aiPanelOpen"
           @pointerdown.prevent
           @mousedown.prevent
@@ -625,6 +650,40 @@ onMounted(() => {
         >
           <mdui-icon-auto-awesome></mdui-icon-auto-awesome>
         </mdui-button-icon>
+
+        <mdui-dropdown placement="bottom-end" @pointerdown.stop @mousedown.stop>
+          <mdui-button-icon
+            slot="trigger"
+            tooltip="More editor actions"
+            aria-label="More editor actions"
+            style="color: #CDDC39; --mdui-button-icon-size: 40px;"
+            tabindex="-1"
+            @pointerdown.stop
+            @mousedown.stop
+          >
+            <mdui-icon-more-vert></mdui-icon-more-vert>
+          </mdui-button-icon>
+          <mdui-menu>
+            <mdui-menu-item @click="previewMode = !previewMode">
+              <mdui-icon-visibility v-if="!previewMode" slot="icon"></mdui-icon-visibility>
+              <mdui-icon-edit v-else slot="icon"></mdui-icon-edit>
+              {{ previewMode ? 'Back to editor' : 'Preview' }}
+            </mdui-menu-item>
+            <mdui-menu-item @click="toggleSearch">
+              <mdui-icon-search slot="icon"></mdui-icon-search>
+              Find & replace
+            </mdui-menu-item>
+            <mdui-menu-item @click="openHistory">
+              <mdui-icon-history slot="icon"></mdui-icon-history>
+              Version history
+            </mdui-menu-item>
+            <mdui-divider></mdui-divider>
+            <mdui-menu-item :disabled="fileStore.readonly" @click="openSaveAsDialog">
+              <mdui-icon-save-as slot="icon"></mdui-icon-save-as>
+              Save as
+            </mdui-menu-item>
+          </mdui-menu>
+        </mdui-dropdown>
       </div>
     </Teleport>
   </div>
@@ -652,31 +711,45 @@ onMounted(() => {
 }
 
 .sidebar-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 19;
+  z-index: 998;
 }
 
 .editor-shell {
   min-height: 0;
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  position: relative;
   background:
     linear-gradient(180deg, rgba(205, 220, 57, 0.08), transparent 18%),
     rgb(var(--mdui-color-background));
 }
 
 .editor-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(82vw, 320px);
+  z-index: 999;
   display: flex;
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  padding-top: 56px;
+  box-sizing: border-box;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background:
     linear-gradient(180deg, rgba(205, 220, 57, 0.08), rgba(0, 0, 0, 0)),
     rgb(var(--mdui-color-surface-container));
+  transform: translateX(-100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--mdui-elevation-level4);
+}
+
+.editor-sidebar.is-open {
+  transform: translateX(0);
 }
 
 .sidebar-header {
@@ -707,6 +780,19 @@ onMounted(() => {
   padding: 8px;
   overflow-y: auto;
   background: transparent;
+}
+
+.sidebar-settings {
+  padding: 0 8px 8px;
+}
+
+.sidebar-settings mdui-divider {
+  margin-bottom: 8px;
+}
+
+.sidebar-settings mdui-list-item {
+  border-radius: 12px;
+  --mdui-list-item-height: 46px;
 }
 
 .sidebar-list mdui-list-item {
@@ -895,6 +981,7 @@ onMounted(() => {
 .editor-top-actions {
   display: flex;
   align-items: center;
+  height: 40px;
   gap: 2px;
 }
 
@@ -952,6 +1039,12 @@ onMounted(() => {
   color: rgb(var(--mdui-color-on-surface));
   caret-color: #CDDC39;
   outline: none;
+}
+
+.native-textarea.word-wrap-off {
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
 }
 
 .search-slide-enter-active,
@@ -1015,24 +1108,6 @@ onMounted(() => {
 }
 
 @media (max-width: 959px) {
-  .editor-shell {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .editor-sidebar {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: min(82vw, 320px);
-    z-index: 20;
-    transform: translateX(-100%);
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: var(--mdui-elevation-level4);
-  }
-
-  .editor-sidebar.is-open {
-    transform: translateX(0);
-  }
-
   .editor-status-bar {
     padding: 8px 14px;
     font-size: 11px;

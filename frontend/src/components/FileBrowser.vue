@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick, watch } from 'vue';
+import { ref, computed, nextTick, onBeforeUnmount, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFileStore } from '@/stores/fileStore';
 import debounce from 'lodash/debounce';
@@ -18,9 +18,16 @@ import '@mdui/icons/arrow-upward.js';
 import '@mdui/icons/arrow-downward.js';
 import '@mdui/icons/search.js';
 import '@mdui/icons/close.js';
+import '@mdui/icons/drive-file-move.js';
+import '@mdui/icons/check-box.js';
+import '@mdui/icons/check-box-outline-blank.js';
+import '@mdui/icons/checklist.js';
 
 const fileStore = useFileStore();
 const { sortedFiles } = storeToRefs(fileStore);
+const emit = defineEmits<{
+  'selectionChange': [count: number];
+}>();
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '';
@@ -36,8 +43,48 @@ const createName = ref('');
 const renameDialogOpen = ref(false);
 const renameOldPath = ref('');
 const renameNewName = ref('');
+const selectedEntries = ref<any[]>([]);
+const selectionCount = computed(() => selectedEntries.value.length);
+const moveSnackbarOpen = ref(false);
+const movingEntry = ref<any | null>(null);
+const moveQueue = ref<any[]>([]);
+const moveTotalCount = ref(0);
+const moveRenameDialogOpen = ref(false);
+const moveRenameName = ref('');
+const moveDestinationPath = ref('.');
+const currentDirectoryName = computed(() => {
+  if (fileStore.currentPath === '.') return 'Workspace';
+  return fileStore.currentPath.split('/').filter(Boolean).pop() || 'Workspace';
+});
+const moveSnackbarLabel = computed(() => {
+  if (moveTotalCount.value > 1) return `Move ${moveTotalCount.value} selected to`;
+  return `Move ${movingEntry.value?.name || ''} to`;
+});
+
+watch(selectionCount, count => emit('selectionChange', count), { immediate: true });
+onBeforeUnmount(() => emit('selectionChange', 0));
+
+const isSelected = (entry: any) =>
+  selectedEntries.value.some(selected => selected.path === entry.path);
+
+const toggleSelection = (entry: any) => {
+  if (isSelected(entry)) {
+    selectedEntries.value = selectedEntries.value.filter(selected => selected.path !== entry.path);
+  } else {
+    selectedEntries.value = [...selectedEntries.value, entry];
+  }
+};
+
+const clearSelection = () => {
+  selectedEntries.value = [];
+};
 
 const handleEntryClick = (entry: any) => {
+  if (selectionCount.value > 0 && !moveSnackbarOpen.value) {
+    toggleSelection(entry);
+    return;
+  }
+
   if (entry.type === 'directory') {
     fileStore.navigate(entry.path);
   } else {
@@ -46,6 +93,9 @@ const handleEntryClick = (entry: any) => {
 };
 
 const goBack = () => {
+  if (!moveSnackbarOpen.value) {
+    clearSelection();
+  }
   const parts = fileStore.currentPath.split('/');
   if (parts.length > 1) {
     parts.pop();
@@ -78,6 +128,112 @@ const confirmRename = async () => {
   if (renameNewName.value.trim() && renameNewName.value !== renameOldPath.value.split('/').pop()) {
     await fileStore.renameEntry(renameOldPath.value, renameNewName.value.trim());
     renameDialogOpen.value = false;
+  }
+};
+
+const beginMove = (entries: any[]) => {
+  if (entries.length === 0) return;
+  moveQueue.value = [...entries];
+  moveTotalCount.value = entries.length;
+  movingEntry.value = moveQueue.value[0];
+  moveSnackbarOpen.value = true;
+};
+
+const startMove = (entry: any) => beginMove([entry]);
+const startSelectedMove = () => beginMove(selectedEntries.value);
+
+const cancelMove = () => {
+  moveSnackbarOpen.value = false;
+  moveRenameDialogOpen.value = false;
+  movingEntry.value = null;
+  moveQueue.value = [];
+  moveTotalCount.value = 0;
+};
+
+const copyNameFor = (name: string) => {
+  const extensionIndex = name.lastIndexOf('.');
+  if (extensionIndex <= 0) return `${name} copy`;
+  return `${name.slice(0, extensionIndex)} copy${name.slice(extensionIndex)}`;
+};
+
+const openMoveRenameDialog = () => {
+  if (!movingEntry.value) return;
+  moveDestinationPath.value = fileStore.currentPath;
+  moveRenameName.value = copyNameFor(movingEntry.value.name);
+  moveRenameDialogOpen.value = true;
+  fileStore.error = null;
+};
+
+const removeMovedSelection = (entry: any) => {
+  selectedEntries.value = selectedEntries.value.filter(selected => selected.path !== entry.path);
+};
+
+const continueMoveQueue = async () => {
+  while (moveQueue.value.length > 0) {
+    movingEntry.value = moveQueue.value[0];
+    const destinationHasConflict = fileStore.files.some(file =>
+      file.name === movingEntry.value.name && file.path !== movingEntry.value.path
+    );
+    if (destinationHasConflict) {
+      openMoveRenameDialog();
+      return;
+    }
+
+    const result = await fileStore.moveEntry(
+      movingEntry.value,
+      moveDestinationPath.value
+    );
+    if (result === 'conflict') {
+      openMoveRenameDialog();
+      return;
+    }
+    if (result !== 'moved') return;
+
+    const movedEntry = moveQueue.value.shift();
+    removeMovedSelection(movedEntry);
+  }
+
+  cancelMove();
+};
+
+const confirmMove = async () => {
+  if (!movingEntry.value) return;
+  moveDestinationPath.value = fileStore.currentPath;
+  await continueMoveQueue();
+};
+
+const deleteSelected = async () => {
+  const entries = [...selectedEntries.value];
+  if (entries.length === 0) return;
+
+  deletedFileName.value = entries.length === 1 ? entries[0].name : `${entries.length} items`;
+  deleteSnackbarOpen.value = true;
+  clearSelection();
+  await fileStore.deleteEntriesWithUndo(entries);
+};
+
+const handleRenamedMoveSuccess = async () => {
+  const movedEntry = moveQueue.value.shift();
+  removeMovedSelection(movedEntry);
+  moveRenameDialogOpen.value = false;
+  if (moveQueue.value.length === 0) {
+    cancelMove();
+  } else {
+    await continueMoveQueue();
+  }
+};
+
+const confirmRenamedMove = async () => {
+  const name = moveRenameName.value.trim();
+  if (!movingEntry.value || !name) return;
+
+  const result = await fileStore.moveEntry(
+    movingEntry.value,
+    moveDestinationPath.value,
+    name
+  );
+  if (result === 'moved') {
+    await handleRenamedMoveSuccess();
   }
 };
 
@@ -129,6 +285,7 @@ const isFabOpen = ref(false);
     
     <Teleport to="#top-bar-actions">
       <mdui-button-icon 
+        v-if="selectionCount === 0"
         @click="searchVisible = !searchVisible"
         tooltip="Find"
         style="color: #CDDC39; --mdui-button-icon-size: 40px;"
@@ -136,6 +293,27 @@ const isFabOpen = ref(false);
         <mdui-icon-search v-if="!searchVisible"></mdui-icon-search>
         <mdui-icon-close v-else></mdui-icon-close>
       </mdui-button-icon>
+
+      <mdui-dropdown v-else placement="bottom-end">
+        <mdui-button-icon
+          slot="trigger"
+          tooltip="Selected file actions"
+          aria-label="Selected file actions"
+          style="color: #CDDC39; --mdui-button-icon-size: 40px;"
+        >
+          <mdui-icon-more-vert></mdui-icon-more-vert>
+        </mdui-button-icon>
+        <mdui-menu>
+          <mdui-menu-item @click="startSelectedMove">
+            <mdui-icon-drive-file-move slot="icon"></mdui-icon-drive-file-move>
+            Move to...
+          </mdui-menu-item>
+          <mdui-menu-item class="delete-item" @click="deleteSelected">
+            <mdui-icon-delete slot="icon"></mdui-icon-delete>
+            Delete
+          </mdui-menu-item>
+        </mdui-menu>
+      </mdui-dropdown>
     </Teleport>
 
     <!-- Global Search -->
@@ -201,9 +379,24 @@ const isFabOpen = ref(false);
           v-for="file in sortedFiles" 
           :key="file.path"
           @click="handleEntryClick(file)"
+          :class="{ 'selected-entry': isSelected(file) }"
           ripple
         >
-          <mdui-icon-folder v-if="file.type === 'directory'" slot="icon"></mdui-icon-folder>
+          <template v-if="selectionCount > 0">
+            <mdui-icon-check-box
+              v-if="isSelected(file)"
+              slot="icon"
+              class="selection-icon"
+              @click.stop="toggleSelection(file)"
+            ></mdui-icon-check-box>
+            <mdui-icon-check-box-outline-blank
+              v-else
+              slot="icon"
+              class="selection-icon"
+              @click.stop="toggleSelection(file)"
+            ></mdui-icon-check-box-outline-blank>
+          </template>
+          <mdui-icon-folder v-else-if="file.type === 'directory'" slot="icon"></mdui-icon-folder>
           <mdui-icon-insert-drive-file v-else slot="icon"></mdui-icon-insert-drive-file>
           
           {{ file.name }}
@@ -218,6 +411,14 @@ const isFabOpen = ref(false);
               <mdui-icon-more-vert></mdui-icon-more-vert>
             </mdui-button-icon>
             <mdui-menu>
+              <mdui-menu-item @click="toggleSelection(file)">
+                <mdui-icon-checklist slot="icon"></mdui-icon-checklist>
+                {{ isSelected(file) ? 'Deselect' : 'Select' }}
+              </mdui-menu-item>
+              <mdui-menu-item @click="startMove(file)">
+                <mdui-icon-drive-file-move slot="icon"></mdui-icon-drive-file-move>
+                Move
+              </mdui-menu-item>
               <mdui-menu-item @click="openRenameDialog(file)">
                 <mdui-icon-edit slot="icon"></mdui-icon-edit>
                 Rename
@@ -237,7 +438,7 @@ const isFabOpen = ref(false);
     </div>
 
     <!-- FAB for Creation -->
-    <div v-if="!fileStore.readonly" class="fab-container">
+    <div v-if="!fileStore.readonly && selectionCount === 0" class="fab-container">
       <mdui-dropdown placement="top-end" @open="isFabOpen = true" @close="isFabOpen = false">
         <mdui-fab 
           slot="trigger" 
@@ -293,12 +494,47 @@ const isFabOpen = ref(false);
       <mdui-button slot="action" variant="filled" @click="confirmRename">Rename</mdui-button>
     </mdui-dialog>
 
+    <mdui-dialog
+      :open="moveRenameDialogOpen"
+      @overlay-click="moveRenameDialogOpen = false"
+      headline="Rename moved item"
+    >
+      <mdui-text-field
+        v-model="moveRenameName"
+        label="New name"
+        autofocus
+        @keyup.enter="confirmRenamedMove"
+      ></mdui-text-field>
+      <mdui-button slot="action" variant="text" @click="moveRenameDialogOpen = false">Cancel</mdui-button>
+      <mdui-button
+        slot="action"
+        variant="filled"
+        :disabled="!moveRenameName.trim()"
+        @click="confirmRenamedMove"
+      >
+        Move
+      </mdui-button>
+    </mdui-dialog>
+
     <mdui-snackbar 
       :open="deleteSnackbarOpen" 
       @closed="deleteSnackbarOpen = false"
     >
       Deleted {{ deletedFileName }}
       <mdui-button slot="action" variant="text" @click="undoDelete">Undo</mdui-button>
+    </mdui-snackbar>
+
+    <mdui-snackbar
+      :open="moveSnackbarOpen"
+      :auto-close-delay="0"
+      :close-on-outside-click="false"
+      closeable
+      @closed="cancelMove"
+    >
+      {{ moveSnackbarLabel }}
+      <mdui-button slot="action" variant="text" @click="confirmMove">
+        {{ currentDirectoryName }}
+      </mdui-button>
     </mdui-snackbar>
 
     <mdui-snackbar v-if="fileStore.error" open @closed="fileStore.error = null">
@@ -348,6 +584,13 @@ const isFabOpen = ref(false);
 }
 .back-item {
   opacity: 0.8;
+}
+.selected-entry {
+  background-color: rgba(205, 220, 57, 0.14);
+  color: #CDDC39;
+}
+.selection-icon {
+  color: #CDDC39;
 }
 .fab-container {
   position: fixed;

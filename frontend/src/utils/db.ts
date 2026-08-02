@@ -15,6 +15,7 @@ export interface PendingChange {
   type: 'write' | 'create' | 'rename' | 'delete';
   content?: string;
   newName?: string; // For rename
+  newPath?: string; // Full destination path for moves
   entryType?: 'file' | 'directory'; // For create
   timestamp: number;
 }

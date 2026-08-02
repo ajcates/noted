@@ -9,6 +9,9 @@ vi.mock('@/api', () => ({
     list: vi.fn(),
     read: vi.fn(),
     write: vi.fn(),
+    create: vi.fn(),
+    delete: vi.fn(),
+    rename: vi.fn(),
     status: vi.fn(),
   },
 }));
@@ -20,6 +23,7 @@ vi.mock('@/utils/db', () => ({
       toArray: vi.fn(() => Promise.resolve([])),
       get: vi.fn(),
       put: vi.fn(),
+      delete: vi.fn(),
       where: vi.fn(() => ({ equals: vi.fn(() => ({ modify: vi.fn() })) })),
     },
     pendingChanges: {
@@ -103,6 +107,107 @@ describe('fileStore', () => {
     
     expect(store.isEditing).toBe(false);
     expect(fetchFilesSpy).toHaveBeenCalledWith('new/path');
+  });
+
+  it('saves a copy beside the current file and opens it', async () => {
+    const store = useFileStore();
+    store.currentFile = {
+      name: 'original.md',
+      path: 'notes/original.md',
+      type: 'file',
+      size: 8,
+      mtime: '2023-01-01'
+    };
+    store.currentContent = 'A copied note';
+    const copiedFile = {
+      name: 'original copy.md',
+      path: 'notes/original copy.md',
+      type: 'file' as const,
+      size: 13,
+      mtime: '2023-01-02'
+    };
+    const fetchFiles = vi.spyOn(store, 'fetchFiles').mockImplementation(async (path) => {
+      store.currentPath = path ?? '.';
+      store.files = [copiedFile];
+    });
+    const openFile = vi.spyOn(store, 'openFile').mockResolvedValue();
+
+    const saved = await store.saveFileAs('original copy.md', 'A copied note');
+
+    expect(saved).toBe(true);
+    expect(filesApi.create).toHaveBeenCalledWith('notes/original copy.md', 'file');
+    expect(filesApi.write).toHaveBeenCalledWith('notes/original copy.md', 'A copied note');
+    expect(fetchFiles).toHaveBeenCalledWith('notes');
+    expect(openFile).toHaveBeenCalledWith(copiedFile);
+  });
+
+  it('moves an entry into the selected destination directory', async () => {
+    const store = useFileStore();
+    const entry = {
+      name: 'note.md',
+      path: 'notes/note.md',
+      type: 'file' as const,
+      size: 12,
+      mtime: '2023-01-01'
+    };
+    const fetchFiles = vi.spyOn(store, 'fetchFiles').mockResolvedValue();
+
+    const moved = await store.moveEntry(entry, 'archive');
+
+    expect(moved).toBe('moved');
+    expect(filesApi.rename).toHaveBeenCalledWith('notes/note.md', 'archive/note.md');
+    expect(fetchFiles).toHaveBeenCalledWith('archive');
+  });
+
+  it('refuses to move a directory inside itself', async () => {
+    const store = useFileStore();
+    const entry = {
+      name: 'notes',
+      path: 'notes',
+      type: 'directory' as const,
+      size: 0,
+      mtime: '2023-01-01'
+    };
+
+    const moved = await store.moveEntry(entry, 'notes/archive');
+
+    expect(moved).toBe('failed');
+    expect(filesApi.rename).not.toHaveBeenCalled();
+    expect(store.error).toBe('A folder cannot be moved inside itself.');
+  });
+
+  it('optimistically removes multiple entries and restores them when bulk delete is undone', async () => {
+    const store = useFileStore();
+    const entries = [
+      { name: 'one.md', path: 'one.md', type: 'file' as const, size: 1, mtime: '2023-01-01' },
+      { name: 'two.md', path: 'two.md', type: 'file' as const, size: 1, mtime: '2023-01-01' }
+    ];
+    store.files = [...entries];
+
+    const deletion = store.deleteEntriesWithUndo(entries);
+    expect(store.files).toEqual([]);
+
+    store.cancelDelete();
+
+    await expect(deletion).resolves.toBe(false);
+    expect(store.files).toEqual(entries);
+  });
+
+  it('moves an entry under an alternate name after a destination conflict', async () => {
+    const store = useFileStore();
+    const entry = {
+      name: 'note.md',
+      path: 'notes/note.md',
+      type: 'file' as const,
+      size: 12,
+      mtime: '2023-01-01'
+    };
+    vi.spyOn(store, 'fetchFiles').mockResolvedValue();
+
+    const moved = await store.moveEntry(entry, 'archive', 'note copy.md');
+
+    expect(moved).toBe('moved');
+    expect(filesApi.rename).toHaveBeenCalledWith('notes/note.md', 'archive/note copy.md');
   });
 
   it('sets error when fetchFiles fails', async () => {

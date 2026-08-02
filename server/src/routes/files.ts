@@ -88,11 +88,15 @@ export function createFilesRouter(config: AppConfig) {
 
     try {
       const targetPath = resolveSafePath(config.rootPath, relativePath);
+      if (await fs.pathExists(targetPath)) {
+        ctx.throw(409, 'File or directory already exists');
+      }
 
       if (type === 'directory') {
-        await fs.ensureDir(targetPath);
+        await fs.mkdir(targetPath);
       } else {
-        await fs.ensureFile(targetPath);
+        const handle = await fs.open(targetPath, 'wx');
+        await fs.close(handle);
       }
       ctx.body = { success: true };
     } catch (err: any) {
@@ -117,6 +121,9 @@ export function createFilesRouter(config: AppConfig) {
     try {
       const oldTargetPath = resolveSafePath(config.rootPath, oldPath);
       const newTargetPath = resolveSafePath(config.rootPath, newPath);
+      if (await fs.pathExists(newTargetPath)) {
+        ctx.throw(409, 'A file or directory already exists at the destination');
+      }
 
       await fs.move(oldTargetPath, newTargetPath);
       ctx.body = { success: true };
@@ -124,6 +131,9 @@ export function createFilesRouter(config: AppConfig) {
       if (err.status) throw err;
       if (err.code === 'ENOENT') {
         ctx.throw(404, 'Source file not found');
+      }
+      if (err.code === 'EEXIST' || err.message === 'dest already exists.') {
+        ctx.throw(409, 'A file or directory already exists at the destination');
       }
       ctx.throw(500, `Failed to rename: ${err.message}`);
     }

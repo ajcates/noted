@@ -287,6 +287,72 @@ export const useFileStore = defineStore('file', {
         this.error = err.message || 'Failed to save file';
       }
     },
+    async saveFileAs(name: string, content: string): Promise<boolean> {
+      if (!this.currentFile || this.readonly) return false;
+
+      const newName = name.trim();
+      if (!newName || newName === '.' || newName === '..' || /[\\/]/.test(newName)) {
+        this.error = 'Enter a valid file name without folders.';
+        return false;
+      }
+
+      const directory = parentPath(this.currentFile.path);
+      const newPath = directory === '.' ? newName : `${directory}/${newName}`;
+      if (newPath === this.currentFile.path) {
+        this.error = 'Choose a different file name.';
+        return false;
+      }
+
+      const newFile: FileMetadata = {
+        name: newName,
+        path: newPath,
+        type: 'file',
+        size: new Blob([content]).size,
+        mtime: new Date().toISOString(),
+      };
+
+      let createdOnline = false;
+      try {
+        if (this.isOnline) {
+          await filesApi.create(newPath, 'file');
+          createdOnline = true;
+          try {
+            await filesApi.write(newPath, content);
+          } catch (error) {
+            await filesApi.delete(newPath).catch(() => undefined);
+            throw error;
+          }
+        } else {
+          if (await db.files.get(newPath)) {
+            throw new Error('A file with that name already exists.');
+          }
+          await db.files.put({ ...newFile, content });
+          await db.pendingChanges.put({
+            path: newPath,
+            type: 'create',
+            entryType: 'file',
+            timestamp: Date.now()
+          });
+          await db.pendingChanges.put({
+            path: newPath,
+            type: 'write',
+            content,
+            timestamp: Date.now()
+          });
+        }
+
+        await this.fetchFiles(directory);
+        const listedFile = this.files.find(file => file.path === newPath);
+        await this.openFile(listedFile || newFile);
+        return true;
+      } catch (err: any) {
+        if (createdOnline) {
+          await this.fetchFiles(directory);
+        }
+        this.error = err.response?.data?.message || err.message || 'Failed to save file as';
+        return false;
+      }
+    },
     updateDraft(content: string) {
       this.currentContent = content;
     },
@@ -344,6 +410,71 @@ export const useFileStore = defineStore('file', {
         this.error = err.message || 'Failed to rename entry';
       }
     },
+    async moveEntry(
+      entry: FileMetadata,
+      destinationDirectory: string,
+      destinationName = entry.name
+    ): Promise<'moved' | 'conflict' | 'failed'> {
+      const sourceDirectory = parentPath(entry.path);
+      const destination = destinationDirectory || '.';
+      const newName = destinationName.trim();
+      if (!newName || newName === '.' || newName === '..' || /[\\/]/.test(newName)) {
+        this.error = 'Enter a valid name without folders.';
+        return 'failed';
+      }
+      const newPath = destination === '.' ? newName : `${destination}/${newName}`;
+
+      if (sourceDirectory === destination && newName === entry.name) {
+        this.error = `${entry.name} is already in this directory.`;
+        return 'failed';
+      }
+      if (
+        entry.type === 'directory' &&
+        (destination === entry.path || destination.startsWith(`${entry.path}/`))
+      ) {
+        this.error = 'A folder cannot be moved inside itself.';
+        return 'failed';
+      }
+
+      try {
+        if (this.isOnline) {
+          await filesApi.rename(entry.path, newPath);
+        } else {
+          const cachedFiles = await db.files.toArray();
+          if (cachedFiles.some(file => file.path === newPath)) {
+            this.error = 'A file or folder with that name already exists here.';
+            return 'conflict';
+          }
+
+          const affectedFiles = cachedFiles.filter(file =>
+            file.path === entry.path || file.path.startsWith(`${entry.path}/`)
+          );
+          await db.pendingChanges.put({
+            path: entry.path,
+            type: 'rename',
+            newPath,
+            timestamp: Date.now()
+          });
+
+          for (const cached of affectedFiles) {
+            const movedPath = `${newPath}${cached.path.slice(entry.path.length)}`;
+            await db.files.delete(cached.path);
+            await db.files.put({
+              ...cached,
+              path: movedPath,
+              name: cached.path === entry.path ? newName : cached.name
+            });
+          }
+        }
+
+        await this.fetchFiles(destination);
+        return 'moved';
+      } catch (err: any) {
+        this.error = err.response?.data?.message || err.message || 'Failed to move entry';
+        await this.fetchFiles(destination);
+        return err.response?.status === 409 ? 'conflict' : 'failed';
+      }
+    },
     async deleteEntry(path: string) {
       try {
         if (this.isOnline) {
@@ -390,9 +521,9 @@ export const useFileStore = defineStore('file', {
               await filesApi.create(change.path, change.entryType!);
               break;
             case 'rename':
-              const newPath = change.path.includes('/') 
-                ? change.path.substring(0, change.path.lastIndexOf('/') + 1) + change.newName 
-                : change.newName!;
+              const newPath = change.newPath || (change.path.includes('/')
+                ? change.path.substring(0, change.path.lastIndexOf('/') + 1) + change.newName
+                : change.newName!);
               await filesApi.rename(change.path, newPath);
               break;
             case 'delete':
@@ -421,6 +552,34 @@ export const useFileStore = defineStore('file', {
             resolve(true);
           } catch (err: any) {
             this.error = err.message || 'Failed to delete entry';
+            this.files = originalFiles;
+            resolve(false);
+          }
+        }, 5000);
+
+        (this as any)._cancelDelete = () => {
+          clearTimeout(timeout);
+          this.files = originalFiles;
+          resolve(false);
+        };
+      });
+    },
+    async deleteEntriesWithUndo(files: FileMetadata[]) {
+      if (files.length === 0) return false;
+
+      const originalFiles = [...this.files];
+      const paths = new Set(files.map(file => file.path));
+      this.files = this.files.filter(file => !paths.has(file.path));
+
+      return new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(async () => {
+          try {
+            for (const file of files) {
+              await this.deleteEntry(file.path);
+            }
+            resolve(true);
+          } catch (err: any) {
+            this.error = err.message || 'Failed to delete selected entries';
             this.files = originalFiles;
             resolve(false);
           }

@@ -4,6 +4,7 @@ import Editor from './Editor.vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { db } from '@/utils/db';
 import { useFileStore } from '@/stores/fileStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 // Mock the API
 vi.mock('@/api', () => ({
@@ -72,6 +73,50 @@ describe('Editor.vue', () => {
     expect((textarea.element as HTMLTextAreaElement).value).toBe('Initial content');
   });
 
+  it('renders the sidebar above the editor and requests closing from its backdrop', async () => {
+    const wrapper = mount(Editor, {
+      props: { sidebarOpen: true }
+    });
+
+    expect(document.body.querySelector('.editor-sidebar.is-open')).not.toBeNull();
+    expect(document.body.querySelector('.sidebar-backdrop')).not.toBeNull();
+    expect(document.body.querySelector('[aria-label="Toggle file sidebar"]')).toBeNull();
+
+    (document.body.querySelector('.sidebar-backdrop') as HTMLElement).click();
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted('update:sidebarOpen')).toEqual([[false]]);
+  });
+
+  it('exposes settings from the editor sidebar', async () => {
+    const wrapper = mount(Editor, {
+      props: { sidebarOpen: true }
+    });
+    const settingsItems = Array.from(
+      document.body.querySelectorAll('.sidebar-settings mdui-list-item')
+    ) as HTMLElement[];
+    const settingsItem = settingsItems[settingsItems.length - 1];
+
+    expect(settingsItem).toBeDefined();
+    settingsItem.click();
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted('openSettings')).toEqual([[]]);
+  });
+
+  it('applies the editor font size and word-wrap settings to the textarea', () => {
+    const settingsStore = useSettingsStore();
+    settingsStore.editorFontSize = 19;
+    settingsStore.wordWrap = false;
+
+    const wrapper = mount(Editor);
+    const textarea = wrapper.find('textarea');
+
+    expect(textarea.attributes('wrap')).toBe('off');
+    expect(textarea.classes()).toContain('word-wrap-off');
+    expect((textarea.element as HTMLTextAreaElement).style.fontSize).toBe('19px');
+  });
+
   it('debounces saveFile when content changes', async () => {
     const store = useFileStore();
     store.currentContent = 'Initial content';
@@ -111,6 +156,26 @@ describe('Editor.vue', () => {
     
     // Check if panel is open
     expect(wrapper.findComponent({ name: 'AIPanel' }).props('open')).toBe(true);
+  });
+
+  it('puts preview, find and replace, history, and save as in the final overflow menu', () => {
+    const store = useFileStore();
+    store.currentFile = { name: 'test.md', path: 'test.md' } as any;
+
+    mount(Editor);
+
+    const overflowButton = teleportTarget.querySelector('[aria-label="More editor actions"]');
+    const toolbar = teleportTarget.querySelector('.editor-top-actions');
+
+    expect(overflowButton).not.toBeNull();
+    expect(toolbar?.lastElementChild?.contains(overflowButton)).toBe(true);
+    expect(teleportTarget.querySelector('[aria-label="Search and replace"]')).toBeNull();
+    expect(teleportTarget.querySelector('[aria-label="Preview note"]')).toBeNull();
+    expect(teleportTarget.querySelector('[aria-label="Version history"]')).toBeNull();
+    expect(teleportTarget.textContent).toContain('Preview');
+    expect(teleportTarget.textContent).toContain('Find & replace');
+    expect(teleportTarget.textContent).toContain('Version history');
+    expect(teleportTarget.textContent).toContain('Save as');
   });
 
   it('shows autocomplete when typing @ character', async () => {
